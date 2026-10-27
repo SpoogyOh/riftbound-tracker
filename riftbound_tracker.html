@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Riftbound TCG – Karten &amp; Foil Tracker</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes foilShimmer {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes holoSweep {
+      0% { background-position: -150% 0%; }
+      50% { background-position: 150% 100%; }
+      100% { background-position: -150% 0%; }
+    }
+    .foil-badge {
+      background: linear-gradient(120deg, rgba(245, 158, 11, 0.22), rgba(236, 72, 153, 0.24), rgba(59, 130, 246, 0.24), rgba(16, 185, 129, 0.22));
+      background-size: 250% 250%;
+      animation: foilShimmer 5s ease infinite;
+    }
+    .foil-active-border {
+      box-shadow: 0 0 0 1.5px rgba(245, 158, 11, 0.55), 0 6px 18px -4px rgba(236, 72, 153, 0.28);
+    }
+    /* Diagonal holographic foil overlay on card images when foil > 0 */
+    .foil-image-glare {
+      background: linear-gradient(
+        115deg,
+        transparent 20%,
+        rgba(255, 215, 0, 0.22) 36%,
+        rgba(236, 72, 153, 0.26) 44%,
+        rgba(56, 189, 248, 0.26) 52%,
+        rgba(16, 185, 129, 0.20) 60%,
+        transparent 76%
+      );
+      background-size: 260% 260%;
+      animation: holoSweep 4.5s ease-in-out infinite;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    /* Sammelalbum / Binder look for cards with 0 copies */
+    .card-unowned-img {
+      filter: grayscale(70%) contrast(92%);
+      opacity: 0.52;
+      transition: filter 0.25s ease, opacity 0.25s ease, transform 0.25s ease;
+    }
+    .group:hover .card-unowned-img,
+    .card-unowned-img:hover {
+      filter: grayscale(15%) contrast(100%);
+      opacity: 0.92;
+    }
+    .card-aspect {
+      aspect-ratio: 5 / 7;
+    }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased min-h-screen p-4 md:p-6">
+
+  <div class="max-w-7xl mx-auto space-y-5">
+
+    <!-- Header & Top Actions -->
+    <header class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] font-bold text-sm shadow-sm">
+            RB
+          </span>
+          <h1 class="text-xl font-bold tracking-tight text-[var(--foreground)]">
+            Riftbound Karten-Tracker
+          </h1>
+          <span class="text-xs px-2.5 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--secondary-foreground)] font-medium border border-[var(--border)]">
+            Digitales Sammelalbum • Normal &amp; Foil ✨
+          </span>
+        </div>
+        <p class="text-sm text-[var(--muted-foreground)]">
+          Tracke deine Standard- und Foil-Kopien mit Kartenbildern, Holo-Effekt und Playset-Fortschritt (3×).
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="btnOpenAddModal" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition cursor-pointer shadow-sm">
+          <span>＋ Neue Karte anlegen</span>
+        </button>
+        <button id="btnExportCSV" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] hover:opacity-85 transition cursor-pointer">
+          <span>📊 CSV Export</span>
+        </button>
+        <button id="btnExportJSON" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] hover:opacity-85 transition cursor-pointer">
+          <span>💾 Backup speichern</span>
+        </button>
+        <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] hover:opacity-85 transition cursor-pointer">
+          <span>📂 Backup laden</span>
+          <input id="inputImportJSON" type="file" accept=".json" class="hidden" />
+        </label>
+      </div>
+    </header>
+
+    <!-- Stats Row -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-[var(--muted-foreground)]">Gesamte Karten (Kopien)</span>
+          <span class="text-sm">🃏</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="statTotalCopies" class="text-2xl font-bold text-[var(--foreground)]">0</span>
+          <span id="statNormalBreakdown" class="text-xs text-[var(--muted-foreground)]">(0 Normal)</span>
+        </div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-[var(--muted-foreground)]">Foil-Kopien ✨</span>
+          <span class="text-xs px-2 py-0.5 rounded-full foil-badge font-semibold">FOIL</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="statFoilCopies" class="text-2xl font-bold text-[var(--foreground)]">0</span>
+          <span id="statFoilRatio" class="text-xs text-[var(--muted-foreground)]">0% Foil-Anteil</span>
+        </div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-[var(--muted-foreground)]">Sammelalbum-Fortschritt</span>
+          <span id="statUniquePercent" class="text-xs font-semibold text-[var(--foreground)]">0%</span>
+        </div>
+        <div class="mt-2">
+          <div class="flex items-baseline gap-1.5">
+            <span id="statUniqueOwned" class="text-2xl font-bold text-[var(--foreground)]">0</span>
+            <span class="text-xs text-[var(--muted-foreground)]">von <span id="statTotalCatalog">0</span> Karten</span>
+          </div>
+          <div class="w-full h-1.5 bg-[var(--secondary)] rounded-full overflow-hidden mt-2">
+            <div id="statProgressBar" class="h-full bg-[var(--primary)] transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-[var(--muted-foreground)]">Komplette Playsets (3+)</span>
+          <span class="text-sm">✅</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="statPlaysets" class="text-2xl font-bold text-[var(--foreground)]">0</span>
+          <span class="text-xs text-[var(--muted-foreground)]">spielfertige Sets</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Entry Bar -->
+    <section class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-[var(--foreground)]">⚡ Schnell-Eingabe (Booster / Stapel scannen):</span>
+          <span class="text-xs text-[var(--muted-foreground)] hidden sm:inline">Name oder Nummer (z. B. OGN-001 oder Jinx) eingeben und direkt hinzufügen</span>
+        </div>
+      </div>
+      <form id="quickAddForm" class="mt-3 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+        <div class="sm:col-span-5 relative">
+          <input
+            id="quickCardInput"
+            type="text"
+            list="catalogAutocomplete"
+            placeholder="Kartenname oder Nummer (z. B. OGN-001, Ahri, Super Mega Death Rocket)..."
+            class="w-full px-3 py-2 rounded-lg text-sm bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            required
+          />
+          <datalist id="catalogAutocomplete"></datalist>
+        </div>
+        <div class="sm:col-span-2 flex items-center gap-1.5">
+          <label for="quickNormalDelta" class="text-xs text-[var(--muted-foreground)] whitespace-nowrap">+ Normal:</label>
+          <input
+            id="quickNormalDelta"
+            type="number"
+            min="0"
+            max="99"
+            value="1"
+            class="w-full px-2.5 py-2 rounded-lg text-sm text-center font-semibold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]"
+          />
+        </div>
+        <div class="sm:col-span-2 flex items-center gap-1.5">
+          <label for="quickFoilDelta" class="text-xs text-[var(--muted-foreground)] whitespace-nowrap">+ Foil ✨:</label>
+          <input
+            id="quickFoilDelta"
+            type="number"
+            min="0"
+            max="99"
+            value="0"
+            class="w-full px-2.5 py-2 rounded-lg text-sm text-center font-semibold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]"
+          />
+        </div>
+        <div class="sm:col-span-3 flex items-center gap-2">
+          <button
+            type="submit"
+            class="w-full px-3.5 py-2 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition cursor-pointer shadow-sm"
+          >
+            ＋ Zur Sammlung buchen
+          </button>
+        </div>
+      </form>
+      <p id="quickAddFeedback" class="text-xs text-[var(--muted-foreground)] mt-2 hidden"></p>
+    </section>
+
+    <!-- Filter & Search Controls -->
+    <section class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 shadow-sm space-y-3.5">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <!-- Search Input -->
+        <div class="relative flex-1">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Suche nach Kartenname, Nummer (OGN-001), Champion oder Kartentyp..."
+            class="w-full pl-9 pr-8 py-2 rounded-lg text-sm bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          />
+          <span class="absolute left-3 top-2.5 text-sm text-[var(--muted-foreground)]">🔍</span>
+          <button id="btnClearSearch" type="button" class="hidden absolute right-2.5 top-2 text-xs px-1.5 py-0.5 rounded bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        <!-- Ownership Filter Buttons -->
+        <div class="flex flex-wrap items-center gap-1.5" id="ownershipTabs">
+          <button type="button" data-ownership="all" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer transition">
+            Alle
+          </button>
+          <button type="button" data-ownership="owned" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer transition">
+            Im Besitz
+          </button>
+          <button type="button" data-ownership="foil" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer transition">
+            Nur Foil ✨
+          </button>
+          <button type="button" data-ownership="missing" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer transition">
+            Fehlend (0)
+          </button>
+          <button type="button" data-ownership="incomplete" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer transition">
+            Playset offen (&lt;3)
+          </button>
+          <button type="button" data-ownership="playset" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer transition">
+            Playset voll (3+)
+          </button>
+        </div>
+
+        <!-- View Mode Toggle -->
+        <div class="flex items-center gap-1 bg-[var(--background)] p-1 rounded-lg border border-[var(--border)] self-start lg:self-auto">
+          <button id="viewBtnTable" type="button" class="px-2.5 py-1 rounded text-xs font-semibold bg-[var(--card)] text-[var(--foreground)] shadow-sm cursor-pointer">
+            ☰ Liste
+          </button>
+          <button id="viewBtnGrid" type="button" class="px-2.5 py-1 rounded text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+            ⊞ Karten-Grid (Binder)
+          </button>
+        </div>
+      </div>
+
+      <!-- Second Row: Domain Pills + Dropdowns -->
+      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
+        <div class="flex flex-wrap items-center gap-1.5" id="domainPills">
+          <span class="text-xs font-medium text-[var(--muted-foreground)] mr-1">Domain:</span>
+          <button type="button" data-domain="all" class="domain-pill px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer">
+            Alle
+          </button>
+          <button type="button" data-domain="Fury" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            🔴 Fury
+          </button>
+          <button type="button" data-domain="Calm" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            🟢 Calm
+          </button>
+          <button type="button" data-domain="Mind" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            🔵 Mind
+          </button>
+          <button type="button" data-domain="Body" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            🟡 Body
+          </button>
+          <button type="button" data-domain="Chaos" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            🟣 Chaos
+          </button>
+          <button type="button" data-domain="Order" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            🟠 Order
+          </button>
+          <button type="button" data-domain="Neutral" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            ⚪ Neutral
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="filterSet" class="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+            <option value="all">Alle Sets</option>
+            <option value="OGN">Origins (OGN)</option>
+            <option value="OGS">Proving Grounds (OGS)</option>
+            <option value="SPF">Spiritforged (SPF)</option>
+            <option value="PRM">Promo / Custom (PRM)</option>
+          </select>
+
+          <select id="filterType" class="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+            <option value="all">Alle Kartentypen</option>
+            <option value="Legend">Legend</option>
+            <option value="Champion">Champion</option>
+            <option value="Unit">Unit</option>
+            <option value="Spell">Spell</option>
+            <option value="Signature Spell">Signature Spell</option>
+            <option value="Gear">Gear</option>
+            <option value="Battlefield">Battlefield</option>
+            <option value="Rune">Rune</option>
+          </select>
+
+          <select id="filterRarity" class="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+            <option value="all">Alle Seltenheiten</option>
+            <option value="Common">Common</option>
+            <option value="Uncommon">Uncommon</option>
+            <option value="Rare">Rare</option>
+            <option value="Epic">Epic</option>
+            <option value="Showcase">Showcase / Alt-Art</option>
+          </select>
+
+          <select id="sortSelect" class="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+            <option value="number">Sortierung: Kartennummer</option>
+            <option value="name">Sortierung: Name (A–Z)</option>
+            <option value="total_desc">Sortierung: Meiste Kopien</option>
+            <option value="foil_desc">Sortierung: Meiste Foils ✨</option>
+            <option value="domain">Sortierung: Domain</option>
+            <option value="rarity">Sortierung: Seltenheit</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Count & Active Filter Info -->
+    <div class="flex items-center justify-between px-1">
+      <p id="resultsCounter" class="text-xs text-[var(--muted-foreground)]">
+        Zeige 0 Karten • Klicke auf ein Kartenbild für die Großansicht 🔍
+      </p>
+      <button id="btnResetFilters" type="button" class="hidden text-xs font-medium text-[var(--foreground)] underline cursor-pointer">
+        Filter zurücksetzen
+      </button>
+    </div>
+
+    <!-- TABLE VIEW -->
+    <section id="tableContainer" class="bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-[var(--border)] bg-[var(--secondary)] text-[var(--secondary-foreground)] text-xs font-semibold">
+              <th class="py-3 px-4">Karte &amp; Nr.</th>
+              <th class="py-3 px-3">Domain</th>
+              <th class="py-3 px-3">Typ &amp; Seltenheit</th>
+              <th class="py-3 px-4 text-center">Normal Kopien</th>
+              <th class="py-3 px-4 text-center">Foil Kopien ✨</th>
+              <th class="py-3 px-3 text-center">Gesamt / Playset</th>
+              <th class="py-3 px-3 text-right">Aktion</th>
+            </tr>
+          </thead>
+          <tbody id="cardTableBody" class="divide-y divide-[var(--border)] text-sm">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- GRID VIEW (Binder Look with prominent 5:7 Card Images) -->
+    <section id="gridContainer" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <!-- Populated by JS -->
+    </section>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden bg-[var(--card)] border border-[var(--border)] rounded-xl p-8 text-center space-y-3">
+      <p class="text-base font-semibold text-[var(--foreground)]">Keine Karten für diesen Filter gefunden</p>
+      <p class="text-xs text-[var(--muted-foreground)]">
+        Du kannst die Filter zurücksetzen oder eine neue Karte direkt zu deinem Katalog hinzufügen.
+      </p>
+      <div class="flex justify-center gap-2 pt-1">
+        <button id="btnEmptyReset" type="button" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+          Filter zurücksetzen
+        </button>
+        <button id="btnEmptyAddCard" type="button" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer">
+          ＋ Neue Karte anlegen
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- LIGHTBOX MODAL: Large Card Image Preview + Direct Counters -->
+  <div id="lightboxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3.5">
+      <div class="flex items-center justify-between">
+        <div>
+          <span id="lightboxNumber" class="font-mono text-xs font-semibold text-[var(--muted-foreground)]">OGN-001</span>
+          <h3 id="lightboxName" class="text-base font-bold text-[var(--foreground)] leading-tight">Kartenname</h3>
+        </div>
+        <button id="btnCloseLightbox" type="button" class="text-xs px-2.5 py-1 rounded-lg bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <!-- Large 5:7 Card Artwork Container -->
+      <div id="lightboxImgWrapper" class="relative w-full card-aspect rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--background)] shadow-md">
+        <img id="lightboxImg" src="" alt="" class="w-full h-full object-cover" />
+        <div id="lightboxFoilGlare" class="hidden absolute inset-0 foil-image-glare"></div>
+      </div>
+
+      <div class="flex items-center justify-between text-xs text-[var(--muted-foreground)] px-1">
+        <span id="lightboxMeta">Domain • Typ • Seltenheit</span>
+        <span id="lightboxPlaysetText" class="font-semibold text-[var(--foreground)]">0 / 3</span>
+      </div>
+
+      <!-- Direct Normal & Foil Adjusters inside Lightbox -->
+      <div class="grid grid-cols-2 gap-2.5 pt-1 border-t border-[var(--border)]">
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 flex flex-col items-center gap-1.5">
+          <span class="text-xs font-medium text-[var(--muted-foreground)]">Normal Kopien</span>
+          <div class="flex items-center gap-1.5">
+            <button id="lbNormalMinus" type="button" class="w-7 h-7 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] font-bold text-xs cursor-pointer">−</button>
+            <span id="lbNormalVal" class="w-8 text-center text-sm font-bold text-[var(--foreground)]">0</span>
+            <button id="lbNormalPlus" type="button" class="w-7 h-7 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] font-bold text-xs cursor-pointer">＋</button>
+          </div>
+        </div>
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2.5 flex flex-col items-center gap-1.5">
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-full foil-badge">Foil Kopien ✨</span>
+          <div class="flex items-center gap-1.5">
+            <button id="lbFoilMinus" type="button" class="w-7 h-7 rounded-lg foil-badge border border-[var(--border)] font-bold text-xs cursor-pointer">−</button>
+            <span id="lbFoilVal" class="w-8 text-center text-sm font-bold text-[var(--foreground)]">0</span>
+            <button id="lbFoilPlus" type="button" class="w-7 h-7 rounded-lg foil-badge border border-[var(--border)] font-bold text-xs cursor-pointer">＋</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add / Edit Card (with Custom Image URL & Upload) -->
+  <div id="cardModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl max-w-md w-full p-5 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <h3 id="modalTitle" class="text-base font-bold text-[var(--foreground)]">Neue Riftbound-Karte hinzufügen</h3>
+        <button id="btnCloseModal" type="button" class="text-xs px-2 py-1 rounded bg-[var(--secondary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <form id="modalCardForm" class="space-y-3">
+        <input type="hidden" id="modalCardId" />
+
+        <div class="grid grid-cols-3 gap-2.5">
+          <div class="col-span-1">
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Karten-Nr.</label>
+            <input id="modalNumber" type="text" placeholder="OGN-001" required class="w-full px-3 py-2 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Kartenname</label>
+            <input id="modalName" type="text" placeholder="z. B. Jinx, Loose Cannon" required class="w-full px-3 py-2 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Set</label>
+            <select id="modalSet" class="w-full px-3 py-2 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+              <option value="OGN">Origins (OGN)</option>
+              <option value="OGS">Proving Grounds (OGS)</option>
+              <option value="SPF">Spiritforged (SPF)</option>
+              <option value="PRM">Promo / Custom (PRM)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Domain</label>
+            <select id="modalDomain" class="w-full px-3 py-2 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+              <option value="Fury">🔴 Fury</option>
+              <option value="Calm">🟢 Calm</option>
+              <option value="Mind">🔵 Mind</option>
+              <option value="Body">🟡 Body</option>
+              <option value="Chaos">🟣 Chaos</option>
+              <option value="Order">🟠 Order</option>
+              <option value="Neutral">⚪ Neutral</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Kartentyp</label>
+            <select id="modalType" class="w-full px-3 py-2 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+              <option value="Unit">Unit</option>
+              <option value="Champion">Champion</option>
+              <option value="Legend">Legend</option>
+              <option value="Spell">Spell</option>
+              <option value="Signature Spell">Signature Spell</option>
+              <option value="Gear">Gear</option>
+              <option value="Battlefield">Battlefield</option>
+              <option value="Rune">Rune</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Seltenheit</label>
+            <select id="modalRarity" class="w-full px-3 py-2 rounded-lg text-xs bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]">
+              <option value="Common">Common</option>
+              <option value="Uncommon">Uncommon</option>
+              <option value="Rare">Rare</option>
+              <option value="Epic">Epic</option>
+              <option value="Showcase">Showcase / Alt-Art</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Custom Image URL or File Upload -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-medium text-[var(--foreground)]">Kartenbild (Optional)</label>
+            <span class="text-xs text-[var(--muted-foreground)]">Leer lassen = Auto-CDN / SVG</span>
+          </div>
+          <input
+            id="modalImageUrl"
+            type="text"
+            placeholder="https://... (oder unten eigene Bilddatei wählen)"
+            class="w-full px-2.5 py-1.5 rounded text-xs bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]"
+          />
+          <div class="flex items-center justify-between gap-2 pt-1">
+            <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer hover:opacity-85">
+              <span>🖼️ Bilddatei wählen...</span>
+              <input id="modalImageFile" type="file" accept="image/*" class="hidden" />
+            </label>
+            <button id="btnClearModalImage" type="button" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline cursor-pointer">
+              Auf Standardbild zurücksetzen
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-2.5">
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Normal Kopien</label>
+            <input id="modalNormal" type="number" min="0" max="999" value="1" class="w-full px-2.5 py-1.5 rounded text-sm font-bold bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]" />
+          </div>
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-2.5">
+            <label class="block text-xs font-medium text-[var(--muted-foreground)] mb-1">Foil Kopien ✨</label>
+            <input id="modalFoil" type="number" min="0" max="999" value="0" class="w-full px-2.5 py-1.5 rounded text-sm font-bold bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)]" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
+          <button id="btnCancelModal" type="button" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer">
+            Abbrechen
+          </button>
+          <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer shadow-sm">
+            Karte speichern
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
+    const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
+
+    // Authentic Riftbound Origins (OGN) collector numbers matching https://static.dotgg.gg/riftbound/cards/<NUMBER>.webp
+    const DEFAULT_CARDS = [
+      // Fury (Red)
+      { id: 'OGN-001', number: 'OGN-001', name: 'Blazing Scorcher', set: 'OGN', domain: 'Fury', type: 'Unit', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-002', number: 'OGN-002', name: 'Brazen Buccaneer', set: 'OGN', domain: 'Fury', type: 'Unit', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-003', number: 'OGN-003', name: 'Chemtech Enforcer', set: 'OGN', domain: 'Fury', type: 'Unit', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-004', number: 'OGN-004', name: 'Cleave', set: 'OGN', domain: 'Fury', type: 'Spell', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-005', number: 'OGN-005', name: 'Disintegrate', set: 'OGN', domain: 'Fury', type: 'Spell', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-006', number: 'OGN-006', name: 'Flame Chompers', set: 'OGN', domain: 'Fury', type: 'Unit', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-007', number: 'OGN-007', name: 'Fury Rune', set: 'OGN', domain: 'Fury', type: 'Rune', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-008', number: 'OGN-008', name: 'Get Excited!', set: 'OGN', domain: 'Fury', type: 'Spell', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-009', number: 'OGN-009', name: 'Hextech Ray', set: 'OGN', domain: 'Fury', type: 'Spell', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-010', number: 'OGN-010', name: 'Legion Rearguard', set: 'OGN', domain: 'Fury', type: 'Unit', rarity: 'Common', normal: 0, foil: 0 },
+      { id: 'OGN-027', number: 'OGN-027', name: 'Darius, Trifarian', set: 'OGN', domain: 'Fury', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-030', number: 'OGN-030', name: 'Jinx, Demolitionist', set: 'OGN', domain: 'Fury', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-039', number: 'OGN-039', name: "Kai'Sa, Survivor", set: 'OGN', domain: 'Fury', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-041', number: 'OGN-041', name: 'Volibear, Furious', set: 'OGN', domain: 'Fury', type: 'Champion', rarity: 'Epic', normal: 0, foil: 0 },
+
+      // Calm (Green)
+      { id: 'OGN-066', number: 'OGN-066', name: 'Ahri, Alluring', set: 'OGN', domain: 'Calm', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-076', number: 'OGN-076', name: 'Yasuo, Remorseful', set: 'OGN', domain: 'Calm', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-079', number: 'OGN-079', name: 'Leona, Zealot', set: 'OGN', domain: 'Calm', type: 'Champion', rarity: 'Epic', normal: 0, foil: 0 },
+
+      // Mind (Blue)
+      { id: 'OGN-117', number: 'OGN-117', name: 'Viktor, Innovator', set: 'OGN', domain: 'Mind', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-119', number: 'OGN-119', name: 'Ahri, Inquisitive', set: 'OGN', domain: 'Mind', type: 'Champion', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-121', number: 'OGN-121', name: 'Teemo, Strategist', set: 'OGN', domain: 'Mind', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+
+      // Body (Yellow)
+      { id: 'OGN-151', number: 'OGN-151', name: 'Lee Sin, Centered', set: 'OGN', domain: 'Body', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-164', number: 'OGN-164', name: 'Sett, Brawler', set: 'OGN', domain: 'Body', type: 'Champion', rarity: 'Epic', normal: 0, foil: 0 },
+
+      // Chaos (Purple)
+      { id: 'OGN-197', number: 'OGN-197', name: 'Teemo, Scout', set: 'OGN', domain: 'Chaos', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+
+      // Order (Orange)
+      { id: 'OGN-238', number: 'OGN-238', name: 'Leona, Determined', set: 'OGN', domain: 'Order', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-240', number: 'OGN-240', name: 'Sett, Kingpin', set: 'OGN', domain: 'Order', type: 'Champion', rarity: 'Rare', normal: 0, foil: 0 },
+
+      // Legends & Signature Spells (OGN-247 to OGN-270)
+      { id: 'OGN-247', number: 'OGN-247', name: "Kai'Sa, Daughter of the Void", set: 'OGN', domain: 'Chaos', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-248', number: 'OGN-248', name: 'Icathian Rain', set: 'OGN', domain: 'Chaos', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-249', number: 'OGN-249', name: 'Volibear, Relentless Storm', set: 'OGN', domain: 'Fury', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-250', number: 'OGN-250', name: 'Stormbringer', set: 'OGN', domain: 'Fury', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-251', number: 'OGN-251', name: 'Jinx, Loose Cannon', set: 'OGN', domain: 'Fury', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-252', number: 'OGN-252', name: 'Super Mega Death Rocket!', set: 'OGN', domain: 'Fury', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-253', number: 'OGN-253', name: 'Darius, Hand of Noxus', set: 'OGN', domain: 'Fury', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-254', number: 'OGN-254', name: 'Noxian Guillotine', set: 'OGN', domain: 'Fury', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-255', number: 'OGN-255', name: 'Ahri, Nine-Tailed Fox', set: 'OGN', domain: 'Calm', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-256', number: 'OGN-256', name: 'Fox-Fire', set: 'OGN', domain: 'Calm', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-257', number: 'OGN-257', name: 'Lee Sin, Blind Monk', set: 'OGN', domain: 'Calm', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-258', number: 'OGN-258', name: "Dragon's Rage", set: 'OGN', domain: 'Calm', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-259', number: 'OGN-259', name: 'Yasuo, Unforgiven', set: 'OGN', domain: 'Calm', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-260', number: 'OGN-260', name: 'Last Breath', set: 'OGN', domain: 'Calm', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-261', number: 'OGN-261', name: 'Leona, Radiant Dawn', set: 'OGN', domain: 'Order', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-262', number: 'OGN-262', name: 'Zenith Blade', set: 'OGN', domain: 'Order', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-263', number: 'OGN-263', name: 'Teemo, Swift Scout', set: 'OGN', domain: 'Chaos', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-264', number: 'OGN-264', name: 'Guerrilla Warfare', set: 'OGN', domain: 'Chaos', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-265', number: 'OGN-265', name: 'Viktor, Herald of the Arcane', set: 'OGN', domain: 'Mind', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-266', number: 'OGN-266', name: 'Siphon Power', set: 'OGN', domain: 'Mind', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-267', number: 'OGN-267', name: 'Miss Fortune, Bounty Hunter', set: 'OGN', domain: 'Body', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-268', number: 'OGN-268', name: 'Bullet Time', set: 'OGN', domain: 'Body', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+      { id: 'OGN-269', number: 'OGN-269', name: 'Sett, The Boss', set: 'OGN', domain: 'Body', type: 'Legend', rarity: 'Rare', normal: 0, foil: 0 },
+      { id: 'OGN-270', number: 'OGN-270', name: 'Showstopper', set: 'OGN', domain: 'Body', type: 'Signature Spell', rarity: 'Epic', normal: 0, foil: 0 },
+
+      // Battlefields & Locations
+      { id: 'OGN-275', number: 'OGN-275', name: 'Altar to Unity', set: 'OGN', domain: 'Order', type: 'Battlefield', rarity: 'Uncommon', normal: 0, foil: 0 },
+      { id: 'OGN-280', number: 'OGN-280', name: 'Grove of the God-Willow', set: 'OGN', domain: 'Calm', type: 'Battlefield', rarity: 'Uncommon', normal: 0, foil: 0 },
+      { id: 'OGN-290', number: 'OGN-290', name: "The Arena's Greatest", set: 'OGN', domain: 'Neutral', type: 'Battlefield', rarity: 'Uncommon', normal: 0, foil: 0 },
+
+      // Showcase / Overnumbered Legends
+      { id: 'OGN-299', number: 'OGN-299', name: "Kai'Sa, Daughter of the Void (Showcase)", set: 'OGN', domain: 'Chaos', type: 'Legend', rarity: 'Showcase', normal: 0, foil: 0 },
+      { id: 'OGN-300', number: 'OGN-300', name: 'Volibear, Relentless Storm (Showcase)', set: 'OGN', domain: 'Fury', type: 'Legend', rarity: 'Showcase', normal: 0, foil: 0 },
+      { id: 'OGN-303', number: 'OGN-303', name: 'Ahri, Nine-Tailed Fox (Showcase)', set: 'OGN', domain: 'Calm', type: 'Legend', rarity: 'Showcase', normal: 0, foil: 0 },
+      { id: 'OGN-305', number: 'OGN-305', name: 'Yasuo, Unforgiven (Showcase)', set: 'OGN', domain: 'Calm', type: 'Legend', rarity: 'Showcase', normal: 0, foil: 0 },
+      { id: 'OGN-306', number: 'OGN-306', name: 'Leona, Radiant Dawn (Showcase)', set: 'OGN', domain: 'Order', type: 'Legend', rarity: 'Showcase', normal: 0, foil: 0 },
+      { id: 'OGN-307', number: 'OGN-307', name: 'Teemo, Swift Scout (Showcase)', set: 'OGN', domain: 'Chaos', type: 'Legend', rarity: 'Showcase', normal: 0, foil: 0 },
+      { id: 'OGN-310', number: 'OGN-310', name: 'Sett, The Boss (Showcase)', set: 'OGN', domain: 'Body', type: 'Legend', rarity: 'Showcase', normal: 0, foil: 0 }
+    ];
+
+    const DOMAIN_META = {
+      Fury:    { icon: '🔴', label: 'Fury',    bg1: '#7f1d1d', bg2: '#dc2626', accent: '#fca5a5' },
+      Calm:    { icon: '🟢', label: 'Calm',    bg1: '#064e3b', bg2: '#10b981', accent: '#6ee7b7' },
+      Mind:    { icon: '🔵', label: 'Mind',    bg1: '#1e3a8a', bg2: '#3b82f6', accent: '#93c5fd' },
+      Body:    { icon: '🟡', label: 'Body',    bg1: '#78350f', bg2: '#f59e0b', accent: '#fde68a' },
+      Chaos:   { icon: '🟣', label: 'Chaos',   bg1: '#4c1d95', bg2: '#9333ea', accent: '#d8b4fe' },
+      Order:   { icon: '🟠', label: 'Order',   bg1: '#7c2d12', bg2: '#ea580c', accent: '#fdba74' },
+      Neutral: { icon: '⚪', label: 'Neutral', bg1: '#1e293b', bg2: '#475569', accent: '#cbd5e1' }
+    };
+
+    const TYPE_ICON = {
+      'Legend': '👑',
+      'Champion': '⚔️',
+      'Unit': '🛡️',
+      'Spell': '🔥',
+      'Signature Spell': '✨',
+      'Gear': '⚙️',
+      'Battlefield': '🏰',
+      'Rune': '💎'
+    };
+
+    const RARITY_ORDER = {
+      Common: 1,
+      Uncommon: 2,
+      Rare: 3,
+      Epic: 4,
+      Showcase: 5
+    };
+
+    let state = {
+      cards: [],
+      search: '',
+      ownership: 'all',
+      domain: 'all',
+      set: 'all',
+      type: 'all',
+      rarity: 'all',
+      sort: 'number',
+      viewMode: 'grid', // Default to 'grid' or 'table' — let's keep 'table' or 'grid' easy to switch
+      activeLightboxCardId: null
+    };
+
+    // Generates a stylized SVG TCG Card Data URI for offline / CSP preview / missing CDN image
+    function generateCardSvgDataUri(card) {
+      const d = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
+      const tIcon = TYPE_ICON[card.type] || '🃏';
+      const safeNumber = String(card.number || 'OGN').replace(/[<>&"']/g, '');
+      const safeName = String(card.name || 'Karte').replace(/[<>&"']/g, '');
+      const safeType = String(card.type || 'Unit').replace(/[<>&"']/g, '');
+      const safeRarity = String(card.rarity || 'Common').replace(/[<>&"']/g, '');
+
+      // Split name into up to 2 lines for SVG card
+      const words = safeName.split(' ');
+      let line1 = '';
+      let line2 = '';
+      for (const w of words) {
+        if ((line1 + ' ' + w).trim().length <= 18) {
+          line1 = (line1 + ' ' + w).trim();
+        } else {
+          line2 = (line2 + ' ' + w).trim();
+        }
+      }
+      if (line2.length > 20) {
+        line2 = line2.slice(0, 18) + '…';
+      }
+
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350" width="250" height="350">
+        <defs>
+          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${d.bg1}"/>
+            <stop offset="60%" stop-color="${d.bg2}"/>
+            <stop offset="100%" stop-color="#0f172a"/>
+          </linearGradient>
+          <linearGradient id="frame" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${d.accent}" stop-opacity="0.7"/>
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0.15"/>
+          </linearGradient>
+        </defs>
+        <rect width="250" height="350" rx="16" fill="url(#bg)"/>
+        <rect x="10" y="10" width="230" height="330" rx="12" fill="none" stroke="url(#frame)" stroke-width="2"/>
+        <rect x="18" y="44" width="214" height="175" rx="8" fill="#090d16" fill-opacity="0.45" stroke="${d.accent}" stroke-opacity="0.35" stroke-width="1"/>
+        <circle cx="125" cy="132" r="46" fill="${d.bg2}" fill-opacity="0.35" stroke="${d.accent}" stroke-opacity="0.5" stroke-width="1.5"/>
+        <text x="125" y="147" font-family="sans-serif" font-size="44" text-anchor="middle">${tIcon}</text>
+        <text x="22" y="31" font-family="monospace" font-weight="bold" font-size="13" fill="${d.accent}">${safeNumber}</text>
+        <text x="228" y="31" font-family="sans-serif" font-weight="bold" font-size="12" fill="#ffffff" fill-opacity="0.9" text-anchor="end">${d.label.toUpperCase()}</text>
+        <rect x="18" y="232" width="214" height="94" rx="8" fill="#090d16" fill-opacity="0.72" stroke="${d.accent}" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="125" y="260" font-family="sans-serif" font-weight="bold" font-size="15" fill="#ffffff" text-anchor="middle">${line1}</text>
+        <text x="125" y="280" font-family="sans-serif" font-weight="bold" font-size="14" fill="#e2e8f0" text-anchor="middle">${line2}</text>
+        <text x="125" y="310" font-family="sans-serif" font-size="11" fill="${d.accent}" text-anchor="middle">${safeType} • ${safeRarity}</text>
+      </svg>`;
+
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    }
+
+    // Returns primary image URL (Custom URL -> DotGG Riftbound CDN -> SVG Fallback)
+    function getCardPrimaryImageUrl(card) {
+      if (card.imageUrl && card.imageUrl.trim() !== '') {
+        return card.imageUrl.trim();
+      }
+      if (card.number && /^OGN-\d+/i.test(card.number.trim())) {
+        return `https://static.dotgg.gg/riftbound/cards/${encodeURIComponent(card.number.trim().toUpperCase())}.webp`;
+      }
+      return generateCardSvgDataUri(card);
+    }
+
+    function handleCardImageError(imgEl, cardId) {
+      if (imgEl.dataset.fallbackApplied === 'true') return;
+      imgEl.dataset.fallbackApplied = 'true';
+      const card = state.cards.find(c => c.id === cardId);
+      if (card) {
+        imgEl.src = generateCardSvgDataUri(card);
+      }
+    }
+    window.handleCardImageError = handleCardImageError;
+
+    // Load or migrate collection
+    function loadCollection() {
+      try {
+        const rawV2 = localStorage.getItem(STORAGE_KEY_V2);
+        if (rawV2) {
+          const parsedV2 = JSON.parse(rawV2);
+          if (Array.isArray(parsedV2) && parsedV2.length > 0) {
+            state.cards = parsedV2;
+            return;
+          }
+        }
+
+        // Check if V1 exists and migrate counts by card name so user doesn't lose data
+        const rawV1 = localStorage.getItem(STORAGE_KEY_V1);
+        const freshCatalog = JSON.parse(JSON.stringify(DEFAULT_CARDS));
+        if (rawV1) {
+          const parsedV1 = JSON.parse(rawV1);
+          if (Array.isArray(parsedV1)) {
+            for (const oldCard of parsedV1) {
+              const oldNormal = oldCard.normal || 0;
+              const oldFoil = oldCard.foil || 0;
+              if (oldNormal > 0 || oldFoil > 0) {
+                const match = freshCatalog.find(
+                  c => c.name.toLowerCase() === (oldCard.name || '').toLowerCase() || c.number === oldCard.number
+                );
+                if (match) {
+                  match.normal = oldNormal;
+                  match.foil = oldFoil;
+                } else {
+                  freshCatalog.push(oldCard);
+                }
+              }
+            }
+          }
+        }
+        state.cards = freshCatalog;
+        saveCollection();
+      } catch (err) {
+        console.warn('Could not read localStorage:', err);
+        state.cards = JSON.parse(JSON.stringify(DEFAULT_CARDS));
+      }
+    }
+
+    function saveCollection() {
+      try {
+        localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(state.cards));
+      } catch (err) {
+        console.warn('Could not save to localStorage:', err);
+      }
+    }
+
+    function getPlaysetTarget(card) {
+      if (card.type === 'Legend' || card.type === 'Battlefield') return 1;
+      return 3;
+    }
+
+    function updateCardCount(cardId, field, newValue) {
+      const idx = state.cards.findIndex(c => c.id === cardId);
+      if (idx === -1) return;
+      const cleanVal = Math.max(0, Math.min(999, parseInt(newValue, 10) || 0));
+      state.cards[idx][field] = cleanVal;
+      saveCollection();
+      renderAll();
+      if (state.activeLightboxCardId === cardId) {
+        syncLightboxView(cardId);
+      }
+    }
+
+    function adjustCardCount(cardId, field, delta) {
+      const idx = state.cards.findIndex(c => c.id === cardId);
+      if (idx === -1) return;
+      const current = state.cards[idx][field] || 0;
+      updateCardCount(cardId, field, current + delta);
+    }
+
+    function getFilteredCards() {
+      const q = state.search.trim().toLowerCase();
+
+      const filtered = state.cards.filter(card => {
+        const total = (card.normal || 0) + (card.foil || 0);
+        const target = getPlaysetTarget(card);
+
+        if (q) {
+          const matchName = card.name.toLowerCase().includes(q);
+          const matchNum = card.number.toLowerCase().includes(q);
+          const matchType = card.type.toLowerCase().includes(q);
+          const matchDomain = card.domain.toLowerCase().includes(q);
+          if (!matchName && !matchNum && !matchType && !matchDomain) return false;
+        }
+
+        if (state.ownership === 'owned' && total === 0) return false;
+        if (state.ownership === 'foil' && (card.foil || 0) === 0) return false;
+        if (state.ownership === 'missing' && total > 0) return false;
+        if (state.ownership === 'incomplete' && total >= target) return false;
+        if (state.ownership === 'playset' && total < target) return false;
+
+        if (state.domain !== 'all' && card.domain !== state.domain) return false;
+        if (state.set !== 'all' && card.set !== state.set) return false;
+        if (state.type !== 'all' && card.type !== state.type) return false;
+        if (state.rarity !== 'all' && card.rarity !== state.rarity) return false;
+
+        return true;
+      });
+
+      filtered.sort((a, b) => {
+        if (state.sort === 'name') {
+          return a.name.localeCompare(b.name, 'de');
+        }
+        if (state.sort === 'total_desc') {
+          const totA = (a.normal || 0) + (a.foil || 0);
+          const totB = (b.normal || 0) + (b.foil || 0);
+          return totB - totA || a.number.localeCompare(b.number);
+        }
+        if (state.sort === 'foil_desc') {
+          return (b.foil || 0) - (a.foil || 0) || a.number.localeCompare(b.number);
+        }
+        if (state.sort === 'domain') {
+          return a.domain.localeCompare(b.domain) || a.number.localeCompare(b.number);
+        }
+        if (state.sort === 'rarity') {
+          return (RARITY_ORDER[b.rarity] || 0) - (RARITY_ORDER[a.rarity] || 0) || a.number.localeCompare(b.number);
+        }
+        return a.number.localeCompare(b.number, undefined, { numeric: true });
+      });
+
+      return filtered;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderPlaysetDots(total, target) {
+      let dots = '';
+      for (let i = 1; i <= target; i++) {
+        const filled = total >= i;
+        dots += `<span class="inline-block w-2 h-2 rounded-full ${filled ? 'bg-[var(--primary)]' : 'bg-[var(--secondary)] border border-[var(--border)]'}"></span>`;
+      }
+      return dots;
+    }
+
+    function renderStats() {
+      let totalNormal = 0;
+      let totalFoil = 0;
+      let uniqueOwned = 0;
+      let playsets = 0;
+
+      for (const c of state.cards) {
+        const n = c.normal || 0;
+        const f = c.foil || 0;
+        const tot = n + f;
+        totalNormal += n;
+        totalFoil += f;
+        if (tot > 0) uniqueOwned++;
+        if (tot >= getPlaysetTarget(c)) playsets++;
+      }
+
+      const grandTotal = totalNormal + totalFoil;
+      const catalogSize = state.cards.length;
+      const uniquePct = catalogSize > 0 ? Math.round((uniqueOwned / catalogSize) * 100) : 0;
+      const foilPct = grandTotal > 0 ? Math.round((totalFoil / grandTotal) * 100) : 0;
+
+      document.getElementById('statTotalCopies').textContent = grandTotal.toLocaleString('de-DE');
+      document.getElementById('statNormalBreakdown').textContent = `(${totalNormal.toLocaleString('de-DE')} Normal)`;
+      document.getElementById('statFoilCopies').textContent = totalFoil.toLocaleString('de-DE');
+      document.getElementById('statFoilRatio').textContent = `${foilPct}% Foil-Anteil`;
+      document.getElementById('statUniqueOwned').textContent = uniqueOwned.toLocaleString('de-DE');
+      document.getElementById('statTotalCatalog').textContent = catalogSize.toLocaleString('de-DE');
+      document.getElementById('statUniquePercent').textContent = `${uniquePct}%`;
+      document.getElementById('statProgressBar').style.width = `${uniquePct}%`;
+      document.getElementById('statPlaysets').textContent = playsets.toLocaleString('de-DE');
+
+      const dl = document.getElementById('catalogAutocomplete');
+      dl.innerHTML = state.cards
+        .map(c => `<option value="${escapeHtml(c.number)} – ${escapeHtml(c.name)}"></option>`)
+        .join('');
+    }
+
+    function renderListAndGrid() {
+      const filtered = getFilteredCards();
+      const totalCatalog = state.cards.length;
+      document.getElementById('resultsCounter').textContent =
+        `Zeige ${filtered.length} von ${totalCatalog} Karten • Klicke auf ein Kartenbild für die Großansicht 🔍`;
+
+      const hasFilters =
+        state.search !== '' ||
+        state.ownership !== 'all' ||
+        state.domain !== 'all' ||
+        state.set !== 'all' ||
+        state.type !== 'all' ||
+        state.rarity !== 'all';
+
+      document.getElementById('btnResetFilters').classList.toggle('hidden', !hasFilters);
+      document.getElementById('btnClearSearch').classList.toggle('hidden', state.search === '');
+
+      const emptyEl = document.getElementById('emptyState');
+      const tableContainer = document.getElementById('tableContainer');
+      const gridContainer = document.getElementById('gridContainer');
+
+      if (filtered.length === 0) {
+        emptyEl.classList.remove('hidden');
+        tableContainer.classList.add('hidden');
+        gridContainer.classList.add('hidden');
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+
+      if (state.viewMode === 'table') {
+        tableContainer.classList.remove('hidden');
+        gridContainer.classList.add('hidden');
+        renderTableRows(filtered);
+      } else {
+        tableContainer.classList.add('hidden');
+        gridContainer.classList.remove('hidden');
+        renderGridCards(filtered);
+      }
+    }
+
+    function renderTableRows(cards) {
+      const tbody = document.getElementById('cardTableBody');
+      tbody.innerHTML = cards.map(card => {
+        const normal = card.normal || 0;
+        const foil = card.foil || 0;
+        const total = normal + foil;
+        const target = getPlaysetTarget(card);
+        const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
+        const imgUrl = getCardPrimaryImageUrl(card);
+
+        return `
+          <tr class="group hover:bg-[var(--secondary)]/40 transition">
+            <td class="py-2 px-4">
+              <div class="flex items-center gap-3">
+                <!-- 5:7 Card Thumbnail with Binder state & Foil Glare -->
+                <button
+                  type="button"
+                  onclick="openLightbox('${escapeHtml(card.id)}')"
+                  class="relative w-10 h-14 rounded-md overflow-hidden border border-[var(--border)] bg-[var(--background)] shrink-0 cursor-pointer shadow-xs group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
+                  title="Kartenbild vergrößern"
+                >
+                  <img
+                    src="${escapeHtml(imgUrl)}"
+                    alt="${escapeHtml(card.name)}"
+                    loading="lazy"
+                    onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
+                    class="w-full h-full object-cover ${total === 0 ? 'card-unowned-img' : ''}"
+                  />
+                  ${foil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
+                </button>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono text-xs font-semibold text-[var(--muted-foreground)]">${escapeHtml(card.number)}</span>
+                    ${foil > 0 ? `<span class="text-xs px-2 py-0.5 rounded-full foil-badge font-semibold">✨ ${foil}× Foil</span>` : ''}
+                  </div>
+                  <div class="font-semibold text-sm text-[var(--foreground)] truncate">${escapeHtml(card.name)}</div>
+                </div>
+              </div>
+            </td>
+            <td class="py-2 px-3 whitespace-nowrap">
+              <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)]">
+                <span>${dMeta.icon}</span>
+                <span>${escapeHtml(card.domain)}</span>
+              </span>
+            </td>
+            <td class="py-2 px-3 whitespace-nowrap">
+              <div class="flex items-center gap-1.5 text-xs">
+                <span class="text-[var(--foreground)] font-medium">${escapeHtml(card.type)}</span>
+                <span class="text-[var(--muted-foreground)]">•</span>
+                <span class="text-[var(--muted-foreground)]">${escapeHtml(card.rarity)}</span>
+              </div>
+            </td>
+            <!-- Normal Counter -->
+            <td class="py-2 px-4">
+              <div class="flex items-center justify-center gap-1">
+                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-7 h-7 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] hover:opacity-80 font-bold text-xs cursor-pointer">
+                  −
+                </button>
+                <input
+                  type="number"
+                  min="0"
+                  max="999"
+                  value="${normal}"
+                  onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
+                  aria-label="Normal Kopien für ${escapeHtml(card.name)}"
+                  class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]"
+                />
+                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-7 h-7 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] hover:opacity-80 font-bold text-xs cursor-pointer">
+                  ＋
+                </button>
+              </div>
+            </td>
+            <!-- Foil Counter -->
+            <td class="py-2 px-4">
+              <div class="flex items-center justify-center gap-1">
+                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-7 h-7 rounded-lg foil-badge border border-[var(--border)] hover:opacity-80 font-bold text-xs cursor-pointer">
+                  −
+                </button>
+                <input
+                  type="number"
+                  min="0"
+                  max="999"
+                  value="${foil}"
+                  onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
+                  aria-label="Foil Kopien für ${escapeHtml(card.name)}"
+                  class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)] ${foil > 0 ? 'foil-badge' : ''}"
+                />
+                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-7 h-7 rounded-lg foil-badge border border-[var(--border)] hover:opacity-80 font-bold text-xs cursor-pointer">
+                  ＋
+                </button>
+              </div>
+            </td>
+            <!-- Total & Playset Dots -->
+            <td class="py-2 px-3 text-center whitespace-nowrap">
+              <div class="inline-flex flex-col items-center gap-1">
+                <span class="text-xs font-bold ${total >= target ? 'text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}">
+                  ${total} / ${target}
+                </span>
+                <div class="flex items-center gap-1">
+                  ${renderPlaysetDots(total, target)}
+                </div>
+              </div>
+            </td>
+            <!-- Edit Action -->
+            <td class="py-2 px-3 text-right whitespace-nowrap">
+              <button type="button" onclick="openEditModal('${escapeHtml(card.id)}')" class="text-xs px-2 py-1 rounded bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] hover:opacity-80 cursor-pointer" title="Karte &amp; Bild bearbeiten">
+                ✎
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderGridCards(cards) {
+      const grid = document.getElementById('gridContainer');
+      grid.innerHTML = cards.map(card => {
+        const normal = card.normal || 0;
+        const foil = card.foil || 0;
+        const total = normal + foil;
+        const target = getPlaysetTarget(card);
+        const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
+        const imgUrl = getCardPrimaryImageUrl(card);
+
+        return `
+          <div class="group bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-sm flex flex-col justify-between transition ${foil > 0 ? 'foil-active-border' : ''}">
+            <!-- Top: 5:7 Card Image in Binder Style -->
+            <div class="relative w-full card-aspect bg-[var(--background)] overflow-hidden border-b border-[var(--border)]">
+              <img
+                src="${escapeHtml(imgUrl)}"
+                alt="${escapeHtml(card.name)}"
+                loading="lazy"
+                onclick="openLightbox('${escapeHtml(card.id)}')"
+                onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
+                class="w-full h-full object-cover cursor-pointer group-hover:scale-103 transition-transform duration-300 ${total === 0 ? 'card-unowned-img' : ''}"
+              />
+              ${foil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
+
+              <!-- Top Overlay Badges -->
+              <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+                <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-xs">
+                  ${escapeHtml(card.number)}
+                </span>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-xs">
+                  ${dMeta.icon} ${escapeHtml(card.domain)}
+                </span>
+              </div>
+
+              <!-- Bottom Overlay Badges on Image -->
+              <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+                ${foil > 0
+                  ? `<span class="text-xs px-2 py-0.5 rounded-full foil-badge font-bold text-white bg-black/60 backdrop-blur-xs">✨ ${foil}× Foil</span>`
+                  : `<span></span>`
+                }
+                <button
+                  type="button"
+                  onclick="openEditModal('${escapeHtml(card.id)}')"
+                  class="pointer-events-auto text-xs px-2 py-0.5 rounded-md bg-black/70 text-white hover:bg-black/90 cursor-pointer"
+                  title="Karte &amp; Bild bearbeiten"
+                >
+                  ✎
+                </button>
+              </div>
+            </div>
+
+            <!-- Card Info & Counters -->
+            <div class="p-3 space-y-2.5 flex-1 flex flex-col justify-between">
+              <div>
+                <h3 class="font-bold text-sm text-[var(--foreground)] leading-snug truncate" title="${escapeHtml(card.name)}">
+                  ${escapeHtml(card.name)}
+                </h3>
+                <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+                  ${escapeHtml(card.type)} • ${escapeHtml(card.rarity)}
+                </p>
+              </div>
+
+              <div class="space-y-1.5 pt-2 border-t border-[var(--border)]">
+                <!-- Normal Row -->
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-medium text-[var(--muted-foreground)]">Normal:</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-6 h-6 rounded bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] font-bold text-xs cursor-pointer">−</button>
+                    <input
+                      type="number"
+                      min="0"
+                      max="999"
+                      value="${normal}"
+                      onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
+                      class="w-10 h-6 text-center rounded text-xs font-bold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]"
+                    />
+                    <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-6 h-6 rounded bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] font-bold text-xs cursor-pointer">＋</button>
+                  </div>
+                </div>
+
+                <!-- Foil Row -->
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold px-1.5 py-0.5 rounded foil-badge">Foil ✨:</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-6 h-6 rounded foil-badge border border-[var(--border)] font-bold text-xs cursor-pointer">−</button>
+                    <input
+                      type="number"
+                      min="0"
+                      max="999"
+                      value="${foil}"
+                      onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
+                      class="w-10 h-6 text-center rounded text-xs font-bold bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]"
+                    />
+                    <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-6 h-6 rounded foil-badge border border-[var(--border)] font-bold text-xs cursor-pointer">＋</button>
+                  </div>
+                </div>
+
+                <!-- Playset Progress -->
+                <div class="flex items-center justify-between pt-1">
+                  <span class="text-xs text-[var(--muted-foreground)]">Besitz: <strong class="text-[var(--foreground)]">${total} / ${target}</strong></span>
+                  <div class="flex items-center gap-1">
+                    ${renderPlaysetDots(total, target)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAll() {
+      renderStats();
+      renderListAndGrid();
+    }
+
+    // Lightbox Functions
+    function openLightbox(cardId) {
+      state.activeLightboxCardId = cardId;
+      syncLightboxView(cardId);
+      document.getElementById('lightboxModal').classList.remove('hidden');
+    }
+    window.openLightbox = openLightbox;
+
+    function syncLightboxView(cardId) {
+      const card = state.cards.find(c => c.id === cardId);
+      if (!card) return;
+      const normal = card.normal || 0;
+      const foil = card.foil || 0;
+      const total = normal + foil;
+      const target = getPlaysetTarget(card);
+      const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
+
+      document.getElementById('lightboxNumber').textContent = card.number;
+      document.getElementById('lightboxName').textContent = card.name;
+      document.getElementById('lightboxMeta').textContent = `${dMeta.icon} ${card.domain} • ${card.type} • ${card.rarity}`;
+      document.getElementById('lightboxPlaysetText').textContent = `Gesamt: ${total} / ${target}`;
+
+      const imgEl = document.getElementById('lightboxImg');
+      delete imgEl.dataset.fallbackApplied;
+      imgEl.onerror = () => handleCardImageError(imgEl, card.id);
+      imgEl.src = getCardPrimaryImageUrl(card);
+
+      document.getElementById('lightboxFoilGlare').classList.toggle('hidden', foil === 0);
+      document.getElementById('lightboxImgWrapper').classList.toggle('foil-active-border', foil > 0);
+
+      document.getElementById('lbNormalVal').textContent = normal;
+      document.getElementById('lbFoilVal').textContent = foil;
+    }
+
+    function closeLightbox() {
+      state.activeLightboxCardId = null;
+      document.getElementById('lightboxModal').classList.add('hidden');
+    }
+
+    // Add / Edit Modal
+    function openAddModal(prefillName = '') {
+      document.getElementById('modalTitle').textContent = 'Neue Riftbound-Karte hinzufügen';
+      document.getElementById('modalCardId').value = '';
+      const nextNum = `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
+      document.getElementById('modalNumber').value = nextNum;
+      document.getElementById('modalName').value = prefillName;
+      document.getElementById('modalSet').value = 'OGN';
+      document.getElementById('modalDomain').value = 'Fury';
+      document.getElementById('modalType').value = 'Unit';
+      document.getElementById('modalRarity').value = 'Common';
+      document.getElementById('modalImageUrl').value = '';
+      document.getElementById('modalNormal').value = 1;
+      document.getElementById('modalFoil').value = 0;
+      document.getElementById('cardModal').classList.remove('hidden');
+      document.getElementById('modalName').focus();
+    }
+
+    function openEditModal(cardId) {
+      const card = state.cards.find(c => c.id === cardId);
+      if (!card) return;
+      document.getElementById('modalTitle').textContent = 'Karte & Bild bearbeiten';
+      document.getElementById('modalCardId').value = card.id;
+      document.getElementById('modalNumber').value = card.number;
+      document.getElementById('modalName').value = card.name;
+      document.getElementById('modalSet').value = card.set || 'OGN';
+      document.getElementById('modalDomain').value = card.domain || 'Fury';
+      document.getElementById('modalType').value = card.type || 'Unit';
+      document.getElementById('modalRarity').value = card.rarity || 'Common';
+      document.getElementById('modalImageUrl').value = card.imageUrl || '';
+      document.getElementById('modalNormal').value = card.normal || 0;
+      document.getElementById('modalFoil').value = card.foil || 0;
+      document.getElementById('cardModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('cardModal').classList.add('hidden');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadCollection();
+      // Start in table or grid? Let's sync toggle buttons with state.viewMode
+      state.viewMode = 'table';
+      renderAll();
+
+      // Lightbox events
+      document.getElementById('btnCloseLightbox').addEventListener('click', closeLightbox);
+      document.getElementById('lightboxModal').addEventListener('click', e => {
+        if (e.target.id === 'lightboxModal') closeLightbox();
+      });
+      document.getElementById('lbNormalMinus').addEventListener('click', () => {
+        if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'normal', -1);
+      });
+      document.getElementById('lbNormalPlus').addEventListener('click', () => {
+        if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'normal', 1);
+      });
+      document.getElementById('lbFoilMinus').addEventListener('click', () => {
+        if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'foil', -1);
+      });
+      document.getElementById('lbFoilPlus').addEventListener('click', () => {
+        if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'foil', 1);
+      });
+
+      // Local Image File Upload -> Data URL in Modal
+      document.getElementById('modalImageFile').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          document.getElementById('modalImageUrl').value = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+      document.getElementById('btnClearModalImage').addEventListener('click', () => {
+        document.getElementById('modalImageUrl').value = '';
+        document.getElementById('modalImageFile').value = '';
+      });
+
+      // Search
+      const searchInput = document.getElementById('searchInput');
+      searchInput.addEventListener('input', e => {
+        state.search = e.target.value;
+        renderListAndGrid();
+      });
+
+      document.getElementById('btnClearSearch').addEventListener('click', () => {
+        state.search = '';
+        searchInput.value = '';
+        renderListAndGrid();
+      });
+
+      // Ownership Tabs
+      document.querySelectorAll('.ownership-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.ownership = btn.dataset.ownership;
+          document.querySelectorAll('.ownership-tab').forEach(b => {
+            const active = b.dataset.ownership === state.ownership;
+            b.className = active
+              ? 'ownership-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer transition'
+              : 'ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer transition';
+          });
+          renderListAndGrid();
+        });
+      });
+
+      // Domain Pills
+      document.querySelectorAll('.domain-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.domain = btn.dataset.domain;
+          document.querySelectorAll('.domain-pill').forEach(b => {
+            const active = b.dataset.domain === state.domain;
+            b.className = active
+              ? 'domain-pill px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer'
+              : 'domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] cursor-pointer';
+          });
+          renderListAndGrid();
+        });
+      });
+
+      // Dropdowns
+      document.getElementById('filterSet').addEventListener('change', e => {
+        state.set = e.target.value;
+        renderListAndGrid();
+      });
+      document.getElementById('filterType').addEventListener('change', e => {
+        state.type = e.target.value;
+        renderListAndGrid();
+      });
+      document.getElementById('filterRarity').addEventListener('change', e => {
+        state.rarity = e.target.value;
+        renderListAndGrid();
+      });
+      document.getElementById('sortSelect').addEventListener('change', e => {
+        state.sort = e.target.value;
+        renderListAndGrid();
+      });
+
+      // View Toggle
+      const viewBtnTable = document.getElementById('viewBtnTable');
+      const viewBtnGrid = document.getElementById('viewBtnGrid');
+      viewBtnTable.addEventListener('click', () => {
+        state.viewMode = 'table';
+        viewBtnTable.className = 'px-2.5 py-1 rounded text-xs font-semibold bg-[var(--card)] text-[var(--foreground)] shadow-sm cursor-pointer';
+        viewBtnGrid.className = 'px-2.5 py-1 rounded text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer';
+        renderListAndGrid();
+      });
+      viewBtnGrid.addEventListener('click', () => {
+        state.viewMode = 'grid';
+        viewBtnGrid.className = 'px-2.5 py-1 rounded text-xs font-semibold bg-[var(--card)] text-[var(--foreground)] shadow-sm cursor-pointer';
+        viewBtnTable.className = 'px-2.5 py-1 rounded text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer';
+        renderListAndGrid();
+      });
+
+      // Reset Filters
+      function resetAllFilters() {
+        state.search = '';
+        state.ownership = 'all';
+        state.domain = 'all';
+        state.set = 'all';
+        state.type = 'all';
+        state.rarity = 'all';
+        document.getElementById('searchInput').value = '';
+        document.getElementById('filterSet').value = 'all';
+        document.getElementById('filterType').value = 'all';
+        document.getElementById('filterRarity').value = 'all';
+        document.querySelector('[data-ownership="all"]').click();
+        document.querySelector('[data-domain="all"]').click();
+        renderListAndGrid();
+      }
+      document.getElementById('btnResetFilters').addEventListener('click', resetAllFilters);
+      document.getElementById('btnEmptyReset').addEventListener('click', resetAllFilters);
+
+      // Quick Add Form
+      document.getElementById('quickAddForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const rawInput = document.getElementById('quickCardInput').value.trim();
+        if (!rawInput) return;
+        const addNormal = Math.max(0, parseInt(document.getElementById('quickNormalDelta').value, 10) || 0);
+        const addFoil = Math.max(0, parseInt(document.getElementById('quickFoilDelta').value, 10) || 0);
+
+        let searchKey = rawInput;
+        if (rawInput.includes('–')) {
+          searchKey = rawInput.split('–')[0].trim();
+        }
+
+        const lowerKey = searchKey.toLowerCase();
+        let found = state.cards.find(
+          c => c.number.toLowerCase() === lowerKey || c.name.toLowerCase() === lowerKey
+        );
+        if (!found) {
+          found = state.cards.find(
+            c => c.name.toLowerCase().includes(lowerKey) || c.number.toLowerCase().includes(lowerKey)
+          );
+        }
+
+        const feedbackEl = document.getElementById('quickAddFeedback');
+        feedbackEl.classList.remove('hidden');
+
+        if (found) {
+          found.normal = (found.normal || 0) + addNormal;
+          found.foil = (found.foil || 0) + addFoil;
+          saveCollection();
+          renderAll();
+          feedbackEl.textContent = `✔ Gebucht: ${found.number} ${found.name} (+${addNormal} Normal, +${addFoil} Foil ✨ → Jetzt: ${found.normal} Normal / ${found.foil} Foil)`;
+        } else {
+          const isCode = /^[A-Z]{3}-\d+/i.test(rawInput);
+          const newNum = isCode ? rawInput.toUpperCase() : `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
+          const newCard = {
+            id: `${newNum}-${Date.now()}`,
+            number: newNum,
+            name: rawInput,
+            set: 'OGN',
+            domain: 'Neutral',
+            type: 'Unit',
+            rarity: 'Common',
+            normal: addNormal,
+            foil: addFoil
+          };
+          state.cards.unshift(newCard);
+          saveCollection();
+          renderAll();
+          feedbackEl.textContent = `✨ Neue Karte angelegt & gebucht: "${newCard.name}" (${addNormal} Normal / ${addFoil} Foil)`;
+        }
+
+        document.getElementById('quickCardInput').value = '';
+        document.getElementById('quickCardInput').focus();
+      });
+
+      // Modal Triggers
+      document.getElementById('btnOpenAddModal').addEventListener('click', () => openAddModal());
+      document.getElementById('btnEmptyAddCard').addEventListener('click', () => openAddModal(state.search));
+      document.getElementById('btnCloseModal').addEventListener('click', closeModal);
+      document.getElementById('btnCancelModal').addEventListener('click', closeModal);
+
+      document.getElementById('modalCardForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const existingId = document.getElementById('modalCardId').value;
+        const number = document.getElementById('modalNumber').value.trim();
+        const name = document.getElementById('modalName').value.trim();
+        const set = document.getElementById('modalSet').value;
+        const domain = document.getElementById('modalDomain').value;
+        const type = document.getElementById('modalType').value;
+        const rarity = document.getElementById('modalRarity').value;
+        const imageUrl = document.getElementById('modalImageUrl').value.trim();
+        const normal = Math.max(0, parseInt(document.getElementById('modalNormal').value, 10) || 0);
+        const foil = Math.max(0, parseInt(document.getElementById('modalFoil').value, 10) || 0);
+
+        if (existingId) {
+          const idx = state.cards.findIndex(c => c.id === existingId);
+          if (idx !== -1) {
+            state.cards[idx] = { ...state.cards[idx], number, name, set, domain, type, rarity, imageUrl, normal, foil };
+          }
+        } else {
+          state.cards.unshift({
+            id: `${number}-${Date.now()}`,
+            number,
+            name,
+            set,
+            domain,
+            type,
+            rarity,
+            imageUrl,
+            normal,
+            foil
+          });
+        }
+
+        saveCollection();
+        closeModal();
+        renderAll();
+      });
+
+      // Export JSON Backup
+      document.getElementById('btnExportJSON').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(state.cards, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `riftbound-sammlung-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      // Import JSON Backup
+      document.getElementById('inputImportJSON').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try {
+            const imported = JSON.parse(ev.target.result);
+            if (Array.isArray(imported)) {
+              state.cards = imported;
+              saveCollection();
+              renderAll();
+            }
+          } catch (err) {
+            alert('Ungültige JSON-Datei.');
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      // Export CSV
+      document.getElementById('btnExportCSV').addEventListener('click', () => {
+        const header = ['Nummer', 'Name', 'Set', 'Domain', 'Typ', 'Seltenheit', 'Normal_Kopien', 'Foil_Kopien', 'Gesamt'];
+        const rows = state.cards.map(c => [
+          `"${(c.number || '').replace(/"/g, '""')}"`,
+          `"${(c.name || '').replace(/"/g, '""')}"`,
+          `"${(c.set || '').replace(/"/g, '""')}"`,
+          `"${(c.domain || '').replace(/"/g, '""')}"`,
+          `"${(c.type || '').replace(/"/g, '""')}"`,
+          `"${(c.rarity || '').replace(/"/g, '""')}"`,
+          c.normal || 0,
+          c.foil || 0,
+          (c.normal || 0) + (c.foil || 0)
+        ]);
+        const csvContent = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `riftbound-sammlung-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    });
+  </script>
+</body>
+</html>

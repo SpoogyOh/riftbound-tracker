@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Riftbound TCG – Karten &amp; Foil Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes foilShimmer {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes holoSweep {
+      0% { background-position: -150% 0%; }
+      50% { background-position: 150% 100%; }
+      100% { background-position: -150% 0%; }
+    }
+    .foil-badge {
+      background: linear-gradient(120deg, rgba(245, 158, 11, 0.25), rgba(236, 72, 153, 0.25), rgba(59, 130, 246, 0.25), rgba(16, 185, 129, 0.25));
+      background-size: 250% 250%;
+      animation: foilShimmer 5s ease infinite;
+    }
+    .foil-active-border {
+      box-shadow: 0 0 0 1.5px rgba(245, 158, 11, 0.55), 0 6px 18px -4px rgba(236, 72, 153, 0.3);
+    }
+    .foil-image-glare {
+      background: linear-gradient(
+        115deg,
+        transparent 20%,
+        rgba(255, 215, 0, 0.22) 36%,
+        rgba(236, 72, 153, 0.26) 44%,
+        rgba(56, 189, 248, 0.26) 52%,
+        rgba(16, 185, 129, 0.20) 60%,
+        transparent 76%
+      );
+      background-size: 260% 260%;
+      animation: holoSweep 4.5s ease-in-out infinite;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    .card-unowned-img {
+      filter: grayscale(70%) contrast(92%);
+      opacity: 0.52;
+      transition: filter 0.25s ease, opacity 0.25s ease, transform 0.25s ease;
+    }
+    .group:hover .card-unowned-img,
+    .card-unowned-img:hover {
+      filter: grayscale(15%) contrast(100%);
+      opacity: 0.92;
+    }
+    .card-aspect {
+      aspect-ratio: 5 / 7;
+    }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased min-h-screen p-4 md:p-6">
+
+  <div class="max-w-7xl mx-auto space-y-5">
+
+    <!-- Header -->
+    <header class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600 text-white font-bold text-sm shadow-sm">
+            RB
+          </span>
+          <h1 class="text-xl font-bold tracking-tight text-white">
+            Riftbound Karten-Tracker
+          </h1>
+          <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium border border-slate-700">
+            Digitales Sammelalbum • Normal &amp; Foil ✨
+          </span>
+        </div>
+        <p class="text-sm text-slate-400">
+          Tracke deine Standard- und Foil-Kopien mit Kartenbildern, Holo-Effekt und Playset-Fortschritt (3×).
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="btnOpenAddModal" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition cursor-pointer shadow-sm">
+          <span>＋ Neue Karte anlegen</span>
+        </button>
+        <button id="btnExportCSV" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
+          <span>📊 CSV Export</span>
+        </button>
+        <button id="btnExportJSON" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
+          <span>💾 Backup speichern</span>
+        </button>
+        <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
+          <span>📂 Backup laden</span>
+          <input id="inputImportJSON" type="file" accept=".json" class="hidden" />
+        </label>
+      </div>
+    </header>
+
+    <!-- Stats Row -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-400">Gesamte Karten (Kopien)</span>
+          <span class="text-sm">🃏</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="statTotalCopies" class="text-2xl font-bold text-white">0</span>
+          <span id="statNormalBreakdown" class="text-xs text-slate-400">(0 Normal)</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-400">Foil-Kopien ✨</span>
+          <span class="text-xs px-2 py-0.5 rounded-full foil-badge text-amber-200 font-semibold">FOIL</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="statFoilCopies" class="text-2xl font-bold text-amber-300">0</span>
+          <span id="statFoilRatio" class="text-xs text-slate-400">0% Foil-Anteil</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-400">Sammelalbum-Fortschritt</span>
+          <span id="statUniquePercent" class="text-xs font-semibold text-indigo-400">0%</span>
+        </div>
+        <div class="mt-2">
+          <div class="flex items-baseline gap-1.5">
+            <span id="statUniqueOwned" class="text-2xl font-bold text-white">0</span>
+            <span class="text-xs text-slate-400">von <span id="statTotalCatalog">0</span> Karten</span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-2">
+            <div id="statProgressBar" class="h-full bg-indigo-500 transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-400">Komplette Playsets (3+)</span>
+          <span class="text-sm">✅</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="statPlaysets" class="text-2xl font-bold text-emerald-400">0</span>
+          <span class="text-xs text-slate-400">spielfertige Sets</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Entry Bar -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-white">⚡ Schnell-Eingabe (Booster / Stapel scannen):</span>
+          <span class="text-xs text-slate-400 hidden sm:inline">Name oder Nummer (z. B. OGN-001 oder Jinx) eingeben und direkt hinzufügen</span>
+        </div>
+      </div>
+      <form id="quickAddForm" class="mt-3 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+        <div class="sm:col-span-5 relative">
+          <input
+            id="quickCardInput"
+            type="text"
+            list="catalogAutocomplete"
+            placeholder="Kartenname oder Nummer (z. B. OGN-001, Ahri, Super Mega Death Rocket)..."
+            class="w-full px-3 py-2 rounded-lg text-sm bg-slate-950 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            required
+          />
+          <datalist id="catalogAutocomplete"></datalist>
+        </div>
+        <div class="sm:col-span-2 flex items-center gap-1.5">
+          <label for="quickNormalDelta" class="text-xs text-slate-400 whitespace-nowrap">+ Normal:</label>
+          <input
+            id="quickNormalDelta"
+            type="number"
+            min="0"
+            max="99"
+            value="1"
+            class="w-full px-2.5 py-2 rounded-lg text-sm text-center font-semibold bg-slate-950 text-white border border-slate-700"
+          />
+        </div>
+        <div class="sm:col-span-2 flex items-center gap-1.5">
+          <label for="quickFoilDelta" class="text-xs text-amber-300 whitespace-nowrap">+ Foil ✨:</label>
+          <input
+            id="quickFoilDelta"
+            type="number"
+            min="0"
+            max="99"
+            value="0"
+            class="w-full px-2.5 py-2 rounded-lg text-sm text-center font-semibold bg-slate-950 text-amber-200 border border-amber-500/40"
+          />
+        </div>
+        <div class="sm:col-span-3 flex items-center gap-2">
+          <button
+            type="submit"
+            class="w-full px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition cursor-pointer shadow-sm"
+          >
+            ＋ Zur Sammlung buchen
+          </button>
+        </div>
+      </form>
+      <p id="quickAddFeedback" class="text-xs text-emerald-400 mt-2 hidden"></p>
+    </section>
+
+    <!-- Filter & Search Controls -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm space-y-3.5">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div class="relative flex-1">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Suche nach Kartenname, Nummer (OGN-001), Champion oder Kartentyp..."
+            class="w-full pl-9 pr-8 py-2 rounded-lg text-sm bg-slate-950 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <span class="absolute left-3 top-2.5 text-sm text-slate-400">🔍</span>
+          <button id="btnClearSearch" type="button" class="hidden absolute right-2.5 top-2 text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5" id="ownershipTabs">
+          <button type="button" data-ownership="all" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer transition">
+            Alle
+          </button>
+          <button type="button" data-ownership="owned" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
+            Im Besitz
+          </button>
+          <button type="button" data-ownership="foil" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
+            Nur Foil ✨
+          </button>
+          <button type="button" data-ownership="missing" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
+            Fehlend (0)
+          </button>
+          <button type="button" data-ownership="incomplete" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
+            Playset offen (&lt;3)
+          </button>
+          <button type="button" data-ownership="playset" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
+            Playset voll (3+)
+          </button>
+        </div>
+
+        <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 self-start lg:self-auto">
+          <button id="viewBtnTable" type="button" class="px-2.5 py-1 rounded text-xs font-semibold bg-indigo-600 text-white shadow-sm cursor-pointer">
+            ☰ Liste
+          </button>
+          <button id="viewBtnGrid" type="button" class="px-2.5 py-1 rounded text-xs font-medium text-slate-400 hover:text-white cursor-pointer">
+            ⊞ Karten-Grid (Binder)
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-2 border-t border-slate-800">
+        <div class="flex flex-wrap items-center gap-1.5" id="domainPills">
+          <span class="text-xs font-medium text-slate-400 mr-1">Domain:</span>
+          <button type="button" data-domain="all" class="domain-pill px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white cursor-pointer">
+            Alle
+          </button>
+          <button type="button" data-domain="Fury" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            🔴 Fury
+          </button>
+          <button type="button" data-domain="Calm" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            🟢 Calm
+          </button>
+          <button type="button" data-domain="Mind" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            🔵 Mind
+          </button>
+          <button type="button" data-domain="Body" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            🟡 Body
+          </button>
+          <button type="button" data-domain="Chaos" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            🟣 Chaos
+          </button>
+          <button type="button" data-domain="Order" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            🟠 Order
+          </button>
+          <button type="button" data-domain="Neutral" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            ⚪ Neutral
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="filterSet" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
+            <option value="all">Alle Sets</option>
+            <option value="OGN">Origins (OGN)</option>
+            <option value="OGS">Proving Grounds (OGS)</option>
+            <option value="SPF">Spiritforged (SPF)</option>
+            <option value="PRM">Promo / Custom (PRM)</option>
+          </select>
+
+          <select id="filterType" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
+            <option value="all">Alle Kartentypen</option>
+            <option value="Legend">Legend</option>
+            <option value="Champion">Champion</option>
+            <option value="Unit">Unit</option>
+            <option value="Spell">Spell</option>
+            <option value="Signature Spell">Signature Spell</option>
+            <option value="Gear">Gear</option>
+            <option value="Battlefield">Battlefield</option>
+            <option value="Rune">Rune</option>
+          </select>
+
+          <select id="filterRarity" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
+            <option value="all">Alle Seltenheiten</option>
+            <option value="Common">Common</option>
+            <option value="Uncommon">Uncommon</option>
+            <option value="Rare">Rare</option>
+            <option value="Epic">Epic</option>
+            <option value="Showcase">Showcase / Alt-Art</option>
+          </select>
+
+          <select id="sortSelect" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
+            <option value="number">Sortierung: Kartennummer</option>
+            <option value="name">Sortierung: Name (A–Z)</option>
+            <option value="total_desc">Sortierung: Meiste Kopien</option>
+            <option value="foil_desc">Sortierung: Meiste Foils ✨</option>
+            <option value="domain">Sortierung: Domain</option>
+            <option value="rarity">Sortierung: Seltenheit</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <div class="flex items-center justify-between px-1">
+      <p id="resultsCounter" class="text-xs text-slate-400">Zeige 0 Karten • Klicke auf ein Kartenbild für die Großansicht 🔍</p>
+      <button id="btnResetFilters" type="button" class="hidden text-xs font-medium text-indigo-400 underline cursor-pointer">
+        Filter zurücksetzen
+      </button>
+    </div>
+
+    <!-- TABLE VIEW -->
+    <section id="tableContainer" class="bg-slate-900 border border-slate-800 rounded-xl shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-800 bg-slate-800/60 text-slate-300 text-xs font-semibold">
+              <th class="py-3 px-4">Karte &amp; Nr.</th>
+              <th class="py-3 px-3">Domain</th>
+              <th class="py-3 px-3">Typ &amp; Seltenheit</th>
+              <th class="py-3 px-4 text-center">Normal Kopien</th>
+              <th class="py-3 px-4 text-center">Foil Kopien ✨</th>
+              <th class="py-3 px-3 text-center">Gesamt / Playset</th>
+              <th class="py-3 px-3 text-right">Aktion</th>
+            </tr>
+          </thead>
+          <tbody id="cardTableBody" class="divide-y divide-slate-800 text-sm"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- GRID VIEW (Binder Look) -->
+    <section id="gridContainer" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"></section>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-8 text-center space-y-3">
+      <p class="text-base font-semibold text-white">Keine Karten für diesen Filter gefunden</p>
+      <p class="text-xs text-slate-400">
+        Du kannst die Filter zurücksetzen oder eine neue Karte direkt zu deinem Katalog hinzufügen.
+      </p>
+      <div class="flex justify-center gap-2 pt-1">
+        <button id="btnEmptyReset" type="button" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 cursor-pointer">
+          Filter zurücksetzen
+        </button>
+        <button id="btnEmptyAddCard" type="button" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer">
+          ＋ Neue Karte anlegen
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- LIGHTBOX MODAL -->
+  <div id="lightboxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3.5">
+      <div class="flex items-center justify-between">
+        <div>
+          <span id="lightboxNumber" class="font-mono text-xs font-semibold text-slate-400">OGN-001</span>
+          <h3 id="lightboxName" class="text-base font-bold text-white leading-tight">Kartenname</h3>
+        </div>
+        <button id="btnCloseLightbox" type="button" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <div id="lightboxImgWrapper" class="relative w-full card-aspect rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shadow-md">
+        <img id="lightboxImg" src="" alt="" class="w-full h-full object-cover" />
+        <div id="lightboxFoilGlare" class="hidden absolute inset-0 foil-image-glare"></div>
+      </div>
+
+      <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+        <span id="lightboxMeta">Domain • Typ • Seltenheit</span>
+        <span id="lightboxPlaysetText" class="font-semibold text-white">0 / 3</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1 border-t border-slate-800">
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 flex flex-col items-center gap-1.5">
+          <span class="text-xs font-medium text-slate-400">Normal Kopien</span>
+          <div class="flex items-center gap-1.5">
+            <button id="lbNormalMinus" type="button" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">−</button>
+            <span id="lbNormalVal" class="w-8 text-center text-sm font-bold text-white">0</span>
+            <button id="lbNormalPlus" type="button" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">＋</button>
+          </div>
+        </div>
+        <div class="bg-slate-950 border border-amber-500/30 rounded-xl p-2.5 flex flex-col items-center gap-1.5">
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-full foil-badge text-amber-200">Foil Kopien ✨</span>
+          <div class="flex items-center gap-1.5">
+            <button id="lbFoilMinus" type="button" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">−</button>
+            <span id="lbFoilVal" class="w-8 text-center text-sm font-bold text-amber-200">0</span>
+            <button id="lbFoilPlus" type="button" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">＋</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add / Edit Card -->
+  <div id="cardModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 id="modalTitle" class="text-base font-bold text-white">Neue Riftbound-Karte hinzufügen</h3>
+        <button id="btnCloseModal" type="button" class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
+          ✕
+        </button>
+      </div>
+
+      <form id="modalCardForm" class="space-y-3">
+        <input type="hidden" id="modalCardId" />
+
+        <div class="grid grid-cols-3 gap-2.5">
+          <div class="col-span-1">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Karten-Nr.</label>
+            <input id="modalNumber" type="text" placeholder="OGN-001" required class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Kartenname</label>
+            <input id="modalName" type="text" placeholder="z. B. Jinx, Loose Cannon" required class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Set</label>
+            <select id="modalSet" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
+              <option value="OGN">Origins (OGN)</option>
+              <option value="OGS">Proving Grounds (OGS)</option>
+              <option value="SPF">Spiritforged (SPF)</option>
+              <option value="PRM">Promo / Custom (PRM)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Domain</label>
+            <select id="modalDomain" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
+              <option value="Fury">🔴 Fury</option>
+              <option value="Calm">🟢 Calm</option>
+              <option value="Mind">🔵 Mind</option>
+              <option value="Body">🟡 Body</option>
+              <option value="Chaos">🟣 Chaos</option>
+              <option value="Order">🟠 Order</option>
+              <option value="Neutral">⚪ Neutral</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Kartentyp</label>
+            <select id="modalType" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
+              <option value="Unit">Unit</option>
+              <option value="Champion">Champion</option>
+              <option value="Legend">Legend</option>
+              <option value="Spell">Spell</option>
+              <option value="Signature Spell">Signature Spell</option>
+              <option value="Gear">Gear</option>
+              <option value="Battlefield">Battlefield</option>
+              <option value="Rune">Rune</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Seltenheit</label>
+            <select id="modalRarity" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
+              <option value="Common">Common</option>
+              <option value="Uncommon">Uncommon</option>
+              <option value="Rare">Rare</option>
+              <option value="Epic">Epic</option>
+              <option value="Showcase">Showcase / Alt-Art</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Custom Image URL or File Upload -->
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-medium text-slate-200">Kartenbild (Optional)</label>
+            <span class="text-xs text-slate-400">Leer lassen = Auto-CDN / SVG</span>
+          </div>
+          <input
+            id="modalImageUrl"
+            type="text"
+            placeholder="https://... (oder unten eigene Bilddatei wählen)"
+            class="w-full px-2.5 py-1.5 rounded text-xs bg-slate-900 text-white border border-slate-700"
+          />
+          <div class="flex items-center justify-between gap-2 pt-1">
+            <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 cursor-pointer hover:bg-slate-700">
+              <span>🖼️ Bilddatei wählen...</span>
+              <input id="modalImageFile" type="file" accept="image/*" class="hidden" />
+            </label>
+            <button id="btnClearModalImage" type="button" class="text-xs text-slate-400 hover:text-white underline cursor-pointer">
+              Auf Standardbild zurücksetzen
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+            <label class="block text-xs font-medium text-slate-400 mb-1">Normal Kopien</label>
+            <input id="modalNormal" type="number" min="0" max="999" value="1" class="w-full px-2.5 py-1.5 rounded text-sm font-bold bg-slate-900 text-white border border-slate-700" />
+          </div>
+          <div class="bg-slate-950 border border-amber-500/30 rounded-lg p-2.5">
+            <label class="block text-xs font-medium text-amber-300 mb-1">Foil Kopien ✨</label>
+            <input id="modalFoil" type="number" min="0" max="999" value="0" class="w-full px-2.5 py-1.5 rounded text-sm font-bold bg-slate-900 text-amber-200 border border-amber-500/40" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+          <button id="btnCancelModal" type="button" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
+            Abbrechen
+          </button>
+          <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer shadow-sm">
+            Karte speichern
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="cards.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
