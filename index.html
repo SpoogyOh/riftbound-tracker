@@ -6,6 +6,7 @@
   <title>Riftbound TCG – Karten &amp; Foil Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    button:disabled, input:disabled { opacity: .4; cursor: not-allowed; }
     @keyframes foilShimmer {
       0% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
@@ -102,6 +103,11 @@
       </div>
     </header>
 
+    <section class="text-xs text-slate-400 space-y-1" aria-live="polite">
+      <p>Kartendaten: <a href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-indigo-300 underline">OpenRift</a> · <span id="catalogStatus"></span></p>
+      <p id="storageStatus" role="status">Sammlung wird geladen …</p>
+      <p>Riftbound Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
+    </section>
     <!-- Stats Row -->
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
@@ -342,7 +348,7 @@
               <th class="py-3 px-4">Karte &amp; Nr.</th>
               <th class="py-3 px-3">Domain</th>
               <th class="py-3 px-3">Typ &amp; Seltenheit</th>
-              <th class="py-3 px-4 text-center">Normal Kopien</th>
+              <th class="py-3 px-4 text-center">Normal / Sonderfinish</th>
               <th class="py-3 px-4 text-center">Foil Kopien ✨</th>
               <th class="py-3 px-3 text-center">Gesamt / Playset</th>
               <th class="py-3 px-3 text-right">Aktion</th>
@@ -376,7 +382,7 @@
 
   <!-- LIGHTBOX MODAL -->
   <div id="lightboxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3.5">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
       <div class="flex items-center justify-between">
         <div>
           <span id="lightboxNumber" class="font-mono text-xs font-semibold text-slate-400">OGN-001</span>
@@ -397,9 +403,11 @@
         <span id="lightboxPlaysetText" class="font-semibold text-white">0 / 3</span>
       </div>
 
+      <p id="lightboxRules" class="text-xs text-slate-300 whitespace-pre-line"></p>
+      <a id="lightboxSource" href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-xs text-indigo-300 underline">Kartendetails auf OpenRift ↗</a>
       <div class="grid grid-cols-2 gap-2.5 pt-1 border-t border-slate-800">
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 flex flex-col items-center gap-1.5">
-          <span class="text-xs font-medium text-slate-400">Normal Kopien</span>
+          <span id="lightboxFinish" class="text-xs font-medium text-slate-400">Normal Kopien</span>
           <div class="flex items-center gap-1.5">
             <button id="lbNormalMinus" type="button" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">−</button>
             <span id="lbNormalVal" class="w-8 text-center text-sm font-bold text-white">0</span>
@@ -539,6 +547,8 @@
   </div>
 
   <script src="cards.js"></script>
+  <script src="collection.js"></script>
+  <script src="storage.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -97,9 +97,6 @@ function getCardPrimaryImageUrl(card) {
   if (card.imageUrl && card.imageUrl.trim() !== '') {
     return card.imageUrl.trim();
   }
-  if (card.number && /^OGN-\d+/i.test(card.number.trim())) {
-    return `https://static.dotgg.gg/riftbound/cards/${encodeURIComponent(card.number.trim().toUpperCase())}.webp`;
-  }
   return generateCardSvgDataUri(card);
 }
 
@@ -112,53 +109,57 @@ function handleCardImageError(imgEl, cardId) {
   }
 }
 
-function loadCollection() {
+let persistenceEnabled = true;
+function setStorageStatus(message, error = false) {
+  const el = document.getElementById('storageStatus');
+  el.textContent = message;
+  el.classList.toggle('text-red-300', error);
+}
+async function loadCollection() {
   try {
-    const rawV2 = localStorage.getItem(STORAGE_KEY_V2);
-    if (rawV2) {
-      const parsedV2 = JSON.parse(rawV2);
-      if (Array.isArray(parsedV2) && parsedV2.length > 0) {
-        state.cards = parsedV2;
-        return;
-      }
-    }
-
-    const rawV1 = localStorage.getItem(STORAGE_KEY_V1);
-    const freshCatalog = JSON.parse(JSON.stringify(window.DEFAULT_RIFTBOUND_CARDS || []));
-    if (rawV1) {
-      const parsedV1 = JSON.parse(rawV1);
-      if (Array.isArray(parsedV1)) {
-        for (const oldCard of parsedV1) {
-          const oldNormal = oldCard.normal || 0;
-          const oldFoil = oldCard.foil || 0;
-          if (oldNormal > 0 || oldFoil > 0) {
-            const match = freshCatalog.find(
-              c => c.name.toLowerCase() === (oldCard.name || '').toLowerCase() || c.number === oldCard.number
-            );
-            if (match) {
-              match.normal = oldNormal;
-              match.foil = oldFoil;
-            } else {
-              freshCatalog.push(oldCard);
-            }
-          }
-        }
-      }
-    }
-    state.cards = freshCatalog;
-    saveCollection();
-  } catch (err) {
-    console.warn('Could not read localStorage:', err);
-    state.cards = JSON.parse(JSON.stringify(window.DEFAULT_RIFTBOUND_CARDS || []));
+    state.cards = window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], await window.CollectionStorage.load());
+    const review = state.cards.filter(c => c.migrationReview).length;
+    setStorageStatus(review ? `${review} bisherige Einträge zur Prüfung erhalten.` : 'Sammlung geladen.');
+  } catch (error) {
+    persistenceEnabled = false;
+    state.cards = (window.DEFAULT_RIFTBOUND_CARDS || []).map(c => ({...c}));
+    setStorageStatus('Gespeicherte Sammlung konnte nicht gelesen werden. Bitte Backup sichern und Seite neu laden; Speichern ist gesperrt.', true);
   }
 }
-
 function saveCollection() {
-  try {
-    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(state.cards));
-  } catch (err) {
-    console.warn('Could not save to localStorage:', err);
+  if (!persistenceEnabled) return Promise.resolve(false);
+  const record = window.CollectionModel.snapshot(state.cards, window.DEFAULT_RIFTBOUND_CARDS || []);
+  setStorageStatus('Wird gespeichert …');
+  return window.CollectionStorage.save(record).then(mode => {
+    setStorageStatus(`Gespeichert · ${mode}`);
+    return true;
+  }).catch(() => {
+    setStorageStatus('Speichern fehlgeschlagen. Bitte jetzt ein JSON-Backup herunterladen.', true);
+    return false;
+  });
+}
+function cardDomains(card) { return card.domains?.length ? card.domains : [card.domain || 'Neutral']; }
+function cardLabel(card) {
+  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Vorschau]' : '') + (card.migrationReview ? ' [Zuordnung prüfen]' : '');
+}
+function canCount(card, field) {
+  return !card.finishes || (field === 'foil' ? card.finishes.includes('foil') : card.specialFinish || card.finishes.includes('normal'));
+}
+function refreshCatalogControls() {
+  for (const [id, values] of [
+    ['filterSet', [...new Set(state.cards.map(c=>c.set))]],
+    ['modalSet', [...new Set([...state.cards.map(c=>c.set), 'PRM'])]],
+    ['filterType', [...new Set(state.cards.map(c=>c.type))]],
+    ['modalType', [...new Set([...state.cards.map(c=>c.type), ...Object.keys(TYPE_ICON)])]],
+    ['filterRarity', [...new Set(state.cards.map(c=>c.rarity))]],
+    ['modalRarity', [...new Set(state.cards.map(c=>c.rarity))]]
+  ]) {
+    const el=document.getElementById(id), selected=el.value;
+    el.innerHTML=(id.startsWith('filter') ? '<option value="all">Alle</option>' : '') + values.sort().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if ([...el.options].some(o=>o.value===selected)) el.value=selected;
   }
+  const meta=window.OPENRIFT_CATALOG_META;
+  if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount} Varianten · ${meta.printingCount} Druckeinträge · Stand ${meta.importedAt.slice(0,10)}`;
 }
 
 function getPlaysetTarget(card) {
@@ -169,6 +170,7 @@ function getPlaysetTarget(card) {
 function updateCardCount(cardId, field, newValue) {
   const idx = state.cards.findIndex(c => c.id === cardId);
   if (idx === -1) return;
+  if (!canCount(state.cards[idx], field)) return;
   const cleanVal = Math.max(0, Math.min(999, parseInt(newValue, 10) || 0));
   state.cards[idx][field] = cleanVal;
   saveCollection();
@@ -196,8 +198,9 @@ function getFilteredCards() {
       const matchName = card.name.toLowerCase().includes(q);
       const matchNum = card.number.toLowerCase().includes(q);
       const matchType = card.type.toLowerCase().includes(q);
-      const matchDomain = card.domain.toLowerCase().includes(q);
-      if (!matchName && !matchNum && !matchType && !matchDomain) return false;
+      const matchDomain = cardDomains(card).join(' ').toLowerCase().includes(q);
+      const matchVariant = cardLabel(card).toLowerCase().includes(q);
+      if (!matchName && !matchNum && !matchType && !matchDomain && !matchVariant) return false;
     }
 
     if (state.ownership === 'owned' && total === 0) return false;
@@ -206,7 +209,7 @@ function getFilteredCards() {
     if (state.ownership === 'incomplete' && total >= target) return false;
     if (state.ownership === 'playset' && total < target) return false;
 
-    if (state.domain !== 'all' && card.domain !== state.domain) return false;
+    if (state.domain !== 'all' && !cardDomains(card).includes(state.domain)) return false;
     if (state.set !== 'all' && card.set !== state.set) return false;
     if (state.type !== 'all' && card.type !== state.type) return false;
     if (state.rarity !== 'all' && card.rarity !== state.rarity) return false;
@@ -243,7 +246,8 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function renderPlaysetDots(total, target) {
@@ -277,7 +281,7 @@ function renderStats() {
   const foilPct = grandTotal > 0 ? Math.round((totalFoil / grandTotal) * 100) : 0;
 
   document.getElementById('statTotalCopies').textContent = grandTotal.toLocaleString('de-DE');
-  document.getElementById('statNormalBreakdown').textContent = `(${totalNormal.toLocaleString('de-DE')} Normal)`;
+  document.getElementById('statNormalBreakdown').textContent = `(${totalNormal.toLocaleString('de-DE')} Normal / Sonderfinish)`;
   document.getElementById('statFoilCopies').textContent = totalFoil.toLocaleString('de-DE');
   document.getElementById('statFoilRatio').textContent = `${foilPct}% Foil-Anteil`;
   document.getElementById('statUniqueOwned').textContent = uniqueOwned.toLocaleString('de-DE');
@@ -288,7 +292,7 @@ function renderStats() {
 
   const dl = document.getElementById('catalogAutocomplete');
   dl.innerHTML = state.cards
-    .map(c => `<option value="${escapeHtml(c.number)} – ${escapeHtml(c.name)}"></option>`)
+    .map(c => `<option value="${escapeHtml(c.number)} – ${escapeHtml(cardLabel(c))} | ${escapeHtml(c.id)}"></option>`)
     .join('');
 }
 
@@ -355,7 +359,7 @@ function renderTableRows(cards) {
             >
               <img
                 src="${escapeHtml(imgUrl)}"
-                alt="${escapeHtml(card.name)}"
+                alt="${escapeHtml(cardLabel(card))}"
                 loading="lazy"
                 onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
                 class="w-full h-full object-cover ${total === 0 ? 'card-unowned-img' : ''}"
@@ -367,14 +371,14 @@ function renderTableRows(cards) {
                 <span class="font-mono text-xs font-semibold text-slate-400">${escapeHtml(card.number)}</span>
                 ${foil > 0 ? `<span class="text-xs px-2 py-0.5 rounded-full foil-badge font-semibold text-amber-200">✨ ${foil}× Foil</span>` : ''}
               </div>
-              <div class="font-semibold text-sm text-slate-100 truncate">${escapeHtml(card.name)}</div>
+              <div class="font-semibold text-sm text-slate-100 truncate">${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}</div>
             </div>
           </div>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
           <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
             <span>${dMeta.icon}</span>
-            <span>${escapeHtml(card.domain)}</span>
+            <span>${escapeHtml(cardDomains(card).join(' / '))}</span>
           </span>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
@@ -386,30 +390,30 @@ function renderTableRows(cards) {
         </td>
         <td class="py-2 px-4">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">−</button>
+            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">−</button>
             <input
               type="number"
               min="0"
               max="999"
-              value="${normal}"
+              value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
               class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-slate-900 text-slate-100 border border-slate-700"
             />
-            <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">＋</button>
+            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">＋</button>
           </div>
         </td>
         <td class="py-2 px-4">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">−</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">−</button>
             <input
               type="number"
               min="0"
               max="999"
-              value="${foil}"
+              value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
               class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-slate-900 text-amber-200 border border-amber-500/40 ${foil > 0 ? 'foil-badge' : ''}"
             />
-            <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">＋</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">＋</button>
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
@@ -447,7 +451,7 @@ function renderGridCards(cards) {
         <div class="relative w-full card-aspect bg-slate-950 overflow-hidden border-b border-slate-800">
           <img
             src="${escapeHtml(imgUrl)}"
-            alt="${escapeHtml(card.name)}"
+            alt="${escapeHtml(cardLabel(card))}"
             loading="lazy"
             onclick="openLightbox('${escapeHtml(card.id)}')"
             onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
@@ -460,7 +464,7 @@ function renderGridCards(cards) {
               ${escapeHtml(card.number)}
             </span>
             <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-black/75 text-slate-100 backdrop-blur-xs">
-              ${dMeta.icon} ${escapeHtml(card.domain)}
+              ${dMeta.icon} ${escapeHtml(cardDomains(card).join(' / '))}
             </span>
           </div>
 
@@ -482,42 +486,42 @@ function renderGridCards(cards) {
 
         <div class="p-3 space-y-2.5 flex-1 flex flex-col justify-between">
           <div>
-            <h3 class="font-bold text-sm text-slate-100 leading-snug truncate" title="${escapeHtml(card.name)}">
-              ${escapeHtml(card.name)}
+            <h3 class="font-bold text-sm text-slate-100 leading-snug truncate" title="${escapeHtml(cardLabel(card))}">
+              ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
             </h3>
             <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(card.type)} • ${escapeHtml(card.rarity)}</p>
           </div>
 
           <div class="space-y-1.5 pt-2 border-t border-slate-800">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-slate-400">Normal:</span>
+              <span class="text-xs font-medium text-slate-400">${card.specialFinish ? escapeHtml(card.finishes.join(' / ')) : 'Normal'}:</span>
               <div class="flex items-center gap-1">
-                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">−</button>
+                <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">−</button>
                 <input
                   type="number"
                   min="0"
                   max="999"
-                  value="${normal}"
+                  value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
                   onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
                   class="w-10 h-6 text-center rounded text-xs font-bold bg-slate-950 text-slate-100 border border-slate-700"
                 />
-                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">＋</button>
+                <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">＋</button>
               </div>
             </div>
 
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold px-1.5 py-0.5 rounded foil-badge text-amber-200">Foil ✨:</span>
               <div class="flex items-center gap-1">
-                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">−</button>
+                <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">−</button>
                 <input
                   type="number"
                   min="0"
                   max="999"
-                  value="${foil}"
+                  value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
                   onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
                   class="w-10 h-6 text-center rounded text-xs font-bold bg-slate-950 text-amber-200 border border-amber-500/40"
                 />
-                <button type="button" onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">＋</button>
+                <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">＋</button>
               </div>
             </div>
 
@@ -555,8 +559,14 @@ function syncLightboxView(cardId) {
   const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
 
   document.getElementById('lightboxNumber').textContent = card.number;
-  document.getElementById('lightboxName').textContent = card.name;
-  document.getElementById('lightboxMeta').textContent = `${dMeta.icon} ${card.domain} • ${card.type} • ${card.rarity}`;
+  document.getElementById('lightboxName').textContent = cardLabel(card);
+  document.getElementById('lightboxMeta').textContent = `${dMeta.icon} ${cardDomains(card).join(' / ')} • ${card.type} • ${card.rarity}`;
+  document.getElementById('lightboxRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
+  const sourceLink=document.getElementById('lightboxSource');
+  sourceLink.href=card.sourceUrl || 'https://openrift.app';
+  sourceLink.classList.toggle('hidden', !card.sourceUrl);
+  document.getElementById('lightboxFinish').textContent=card.specialFinish ? `Exemplare: ${card.finishes.join(', ')}` : 'Normal Kopien';
+  for(const [id,field] of [['lbNormalMinus','normal'],['lbNormalPlus','normal'],['lbFoilMinus','foil'],['lbFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
   document.getElementById('lightboxPlaysetText').textContent = `Gesamt: ${total} / ${target}`;
 
   const imgEl = document.getElementById('lightboxImg');
@@ -577,6 +587,7 @@ function closeLightbox() {
 }
 
 function openAddModal(prefillName = '') {
+  for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity','modalNormal','modalFoil']) document.getElementById(id).disabled=false;
   document.getElementById('modalTitle').textContent = 'Neue Riftbound-Karte hinzufügen';
   document.getElementById('modalCardId').value = '';
   const nextNum = `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
@@ -596,6 +607,9 @@ function openAddModal(prefillName = '') {
 function openEditModal(cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card) return;
+  for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity']) document.getElementById(id).disabled=card.source==='OpenRift';
+  document.getElementById('modalNormal').disabled=!canCount(card,'normal');
+  document.getElementById('modalFoil').disabled=!canCount(card,'foil');
   document.getElementById('modalTitle').textContent = 'Karte & Bild bearbeiten';
   document.getElementById('modalCardId').value = card.id;
   document.getElementById('modalNumber').value = card.number;
@@ -620,8 +634,9 @@ window.openEditModal = openEditModal;
 window.openLightbox = openLightbox;
 window.handleCardImageError = handleCardImageError;
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadCollection();
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadCollection();
+  refreshCatalogControls();
   renderAll();
 
   document.getElementById('btnCloseLightbox').addEventListener('click', closeLightbox);
@@ -750,27 +765,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const addNormal = Math.max(0, parseInt(document.getElementById('quickNormalDelta').value, 10) || 0);
     const addFoil = Math.max(0, parseInt(document.getElementById('quickFoilDelta').value, 10) || 0);
 
+    const explicitId=rawInput.includes(' | ') ? rawInput.split(' | ').at(-1) : null;
     let searchKey = rawInput;
     if (rawInput.includes('–')) {
       searchKey = rawInput.split('–')[0].trim();
     }
 
     const lowerKey = searchKey.toLowerCase();
-    let found = state.cards.find(
+    let matches = explicitId ? state.cards.filter(c=>c.id===explicitId) : state.cards.filter(
       c => c.number.toLowerCase() === lowerKey || c.name.toLowerCase() === lowerKey
     );
-    if (!found) {
-      found = state.cards.find(
-        c => c.name.toLowerCase().includes(lowerKey) || c.number.toLowerCase().includes(lowerKey)
-      );
-    }
+    if (!matches.length && !explicitId) matches=state.cards.filter(c=>c.name.toLowerCase().includes(lowerKey) || c.number.toLowerCase().includes(lowerKey));
+    const found = matches.length === 1 ? matches[0] : null;
 
     const feedbackEl = document.getElementById('quickAddFeedback');
     feedbackEl.classList.remove('hidden');
 
+    if (matches.length > 1) {
+      feedbackEl.textContent='Mehrere Varianten gefunden. Bitte eine vollständige Variante aus den Vorschlägen auswählen.';
+      return;
+    }
+    if (found && ((!canCount(found,'normal') && addNormal) || (!canCount(found,'foil') && addFoil))) {
+      feedbackEl.textContent='Diese Ausführung ist im Katalog für das gewählte Finish nicht verfügbar.';
+      return;
+    }
     if (found) {
-      found.normal = (found.normal || 0) + addNormal;
-      found.foil = (found.foil || 0) + addFoil;
+      found.normal = Math.min(999, (found.normal || 0) + addNormal);
+      found.foil = Math.min(999, (found.foil || 0) + addFoil);
       saveCollection();
       renderAll();
       feedbackEl.textContent = `✔ Gebucht: ${found.number} ${found.name} (+${addNormal} Normal, +${addFoil} Foil ✨ → Jetzt: ${found.normal} Normal / ${found.foil} Foil)`;
@@ -778,15 +799,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const isCode = /^[A-Z]{3}-\d+/i.test(rawInput);
       const newNum = isCode ? rawInput.toUpperCase() : `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
       const newCard = {
-        id: `${newNum}-${Date.now()}`,
+        id: `custom-${crypto.randomUUID()}`,
         number: newNum,
         name: rawInput,
         set: 'OGN',
         domain: 'Neutral',
         type: 'Unit',
         rarity: 'Common',
-        normal: addNormal,
-        foil: addFoil
+        normal: Math.min(999,addNormal),
+        foil: Math.min(999,addFoil)
       };
       state.cards.unshift(newCard);
       saveCollection();
@@ -812,7 +833,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const domain = document.getElementById('modalDomain').value;
     const type = document.getElementById('modalType').value;
     const rarity = document.getElementById('modalRarity').value;
-    const imageUrl = document.getElementById('modalImageUrl').value.trim();
+    const catalogCard = (window.DEFAULT_RIFTBOUND_CARDS || []).find(c => c.id === existingId);
+    const imageUrl = document.getElementById('modalImageUrl').value.trim() || catalogCard?.imageUrl || '';
     const normal = Math.max(0, parseInt(document.getElementById('modalNormal').value, 10) || 0);
     const foil = Math.max(0, parseInt(document.getElementById('modalFoil').value, 10) || 0);
 
@@ -823,7 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else {
       state.cards.unshift({
-        id: `${number}-${Date.now()}`,
+        id: `custom-${crypto.randomUUID()}`,
         number,
         name,
         set,
@@ -836,13 +858,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    refreshCatalogControls();
     saveCollection();
     closeModal();
     renderAll();
   });
 
   document.getElementById('btnExportJSON').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(state.cards, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(window.CollectionModel.snapshot(state.cards, window.DEFAULT_RIFTBOUND_CARDS || []), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -858,30 +881,37 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.onload = ev => {
       try {
         const imported = JSON.parse(ev.target.result);
-        if (Array.isArray(imported)) {
-          state.cards = imported;
-          saveCollection();
-          renderAll();
-        }
+        const items=Array.isArray(imported) ? imported : imported.schemaVersion===3 ? imported.items : null;
+        window.CollectionModel.validateItems(items);
+        const restored=window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], items);
+        if (!confirm('Backup laden und den aktuellen Bestand ersetzen?')) return;
+        state.cards=restored;
+        persistenceEnabled=true;
+        refreshCatalogControls();
+        saveCollection();
+        renderAll();
       } catch (err) {
-        alert('Ungültige JSON-Datei.');
+        alert('Ungültiges Backup: ' + err.message);
       }
     };
     reader.readAsText(file);
   });
 
   document.getElementById('btnExportCSV').addEventListener('click', () => {
-    const header = ['Nummer', 'Name', 'Set', 'Domain', 'Typ', 'Seltenheit', 'Normal_Kopien', 'Foil_Kopien', 'Gesamt'];
+    const header = ['Nummer', 'Name', 'Set', 'Domain', 'Typ', 'Seltenheit', 'Normal_oder_Sonderfinish_Kopien', 'Foil_Kopien', 'Gesamt', 'Varianten_ID', 'Variante', 'Finishes'];
     const rows = state.cards.map(c => [
       `"${(c.number || '').replace(/"/g, '""')}"`,
       `"${(c.name || '').replace(/"/g, '""')}"`,
       `"${(c.set || '').replace(/"/g, '""')}"`,
-      `"${(c.domain || '').replace(/"/g, '""')}"`,
+      `"${cardDomains(c).join(' / ').replace(/"/g, '""')}"`,
       `"${(c.type || '').replace(/"/g, '""')}"`,
       `"${(c.rarity || '').replace(/"/g, '""')}"`,
       c.normal || 0,
       c.foil || 0,
-      (c.normal || 0) + (c.foil || 0)
+      (c.normal || 0) + (c.foil || 0),
+      c.id,
+      `"${(c.variant || '').replace(/"/g, '""')}"`,
+      (c.finishes || []).join(',')
     ]);
     const csvContent = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
