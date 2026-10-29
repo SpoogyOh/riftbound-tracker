@@ -48,10 +48,12 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `types/database.generated.ts` | TypeScript types generated from the deployed Supabase database. | Regenerate after applying schema migrations. |
 | `types/openrift.ts` | Expected upstream fields consumed by the importer. | Update the OpenRift input contract. |
 | `types/browser.d.ts` | Declares the two generated catalog globals on `window`. | Change how browser scripts access the catalog. |
-| `tsconfig.json` | Strict type-checking scope for the first migration phase. | Add a source file as it is migrated. |
+| `tsconfig.json` | Strict type-checking scope for the gradual migration. | Add a source file as it is migrated. |
+| `tsconfig.tools.json` | Compiles the TypeScript catalog export tool into the ignored `.cache/tools/` directory. | Change the Node.js tool build. |
 | `supabase/` | Versioned PostgreSQL schema, access policies, quantity adjustment function, and local Supabase configuration. | Evolve the central database through new migrations. |
 | `docs/database.md` | Data model, setup steps, access rules, and boundaries of the database foundation. | Change the online-storage design or setup instructions. |
 | `scripts/import-openrift.mjs` | Downloads or reads OpenRift data, validates and normalizes it, groups normal/foil twins, and generates `cards.js`. | Change the data source or catalog mapping. |
+| `scripts/export-supabase-catalog.mts` | Validates the bundled catalog and generates an atomic PostgreSQL refresh, preserving IDs and quantities. | Change the database catalog mapping or refresh rules. |
 | `scripts/build-standalone.mjs` | Embeds the shared scripts into `index.html` to generate the single-file app. | Change how the standalone file is built. |
 | `riftbound_tracker.html` | Generated single-file version of the app. | Regenerate after shared source changes. |
 | `package.json` | Lists development commands, the supported Node.js version, and development dependencies. | Add a command or dependency. |
@@ -60,6 +62,7 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `tests/catalog.test.mjs` | Tests catalog normalization, IDs, migration, quantities, and backup validation. | Verify data and migration changes. |
 | `tests/app.test.mjs` | Tests app initialization, controls, persistence, and fallbacks in jsdom with fake-indexeddb. | Verify app logic without launching a browser. |
 | `tests/database.test.mjs` | Applies the SQL migration to PGlite and verifies grants, user isolation, quantities, and data preservation. | Verify database changes. |
+| `tests/catalog-import.test.mjs` | Tests the complete catalog import, repeatability, archiving, quoting, and owned-card conflicts in PostgreSQL. | Verify catalog refresh changes. |
 | `tests/browser/tracker.spec.cjs` | End-to-end tests in real Chrome: migration, native IndexedDB, reload, backups, CSV, filters, variants, desktop/mobile-width views, and an actual image request. | Verify complete user flows. |
 | `.github/workflows/browser-test.yml` | GitHub Actions workflow that installs dependencies, runs the tests, and uploads browser reports/screenshots. | Change automated checks. |
 | `.gitignore` | Lists local caches, dependencies, temporary files, and reports that Git should not track. | Exclude another generated local artifact. |
@@ -107,10 +110,12 @@ npm ci
 | Command | What it does |
 | --- | --- |
 | `npm run catalog:update` | Refreshes the English OpenRift catalog and generates `cards.js`. |
+| `npm run build:tools` | Compiles the TypeScript Node.js export tool. |
+| `npm run catalog:sql` | Validates `cards.js` and generates `.cache/catalog-import.sql` for a trusted Supabase import. |
 | `npm run standalone:build` | Generates `riftbound_tracker.html` from the current shared source. |
-| `npm run typecheck` | Checks the shared TypeScript models and catalog importer. |
+| `npm run typecheck` | Checks the shared TypeScript models, catalog normalizer, and database export tool. |
 | `npm test` | Runs catalog, jsdom/storage, and PostgreSQL database tests without launching a browser. |
-| `npm run test:database` | Runs only the database migration and access-control tests. |
+| `npm run test:database` | Builds the tool and runs the database migration, access-control, and catalog import tests. |
 | `npm run test:browser` | Runs the Chrome end-to-end tests. |
 
 The browser-test configuration expects an installed Google Chrome and a `python3` executable. It starts a local server automatically, or reuses an existing server locally. The GitHub workflow runs on Ubuntu 24.04 with Chrome already installed.
@@ -124,6 +129,8 @@ The first phase defines shared models in `types/` and checks the existing import
 `allowJs` and `checkJs` let checked JavaScript coexist with TypeScript. `noEmit` means this phase does not add a browser build step or generate replacement runtime scripts. The large generated `cards.js` payload is outside the type-checking scope; its transformation is checked at the importer boundary. `collection.js`, `storage.js`, `app.js`, and the tests are outside the type-checking scope until their migration phases; the collection-backup types describe their current format but do not yet check their implementations.
 
 Next, migrate the importer implementation to TypeScript, followed by collection/storage logic and finally the interface code. Keep the generated JavaScript and standalone HTML usable throughout. Type checking does not validate untrusted API responses or imported backups at runtime; the existing runtime checks and tests remain necessary.
+
+The Supabase export tool is implemented in TypeScript (`.mts`) and compiled for Node.js by `tsconfig.tools.json`. Test commands build it automatically. The browser runtime still uses the existing shared JavaScript files.
 
 ### Import behavior
 
@@ -142,7 +149,7 @@ The generated metadata records the import date and catalog size. A set is marked
 
 Supabase (PostgreSQL) is the selected backend for the future online app. The initial migration creates a shared card catalog and an owner-scoped collection table, with explicit grants, Row Level Security, and a quantity adjustment function. The first online version tracks catalog-backed cards; custom cards are deferred. See [docs/database.md](docs/database.md) for setup and the data model.
 
-The migration is deployed to the Frankfurt development project [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml). Database-role smoke checks passed, and their temporary fixtures were rolled back. The catalog and personal collection tables are still empty. The browser app still uses its bundled catalog and IndexedDB; it does not connect to Supabase yet. The frontend framework remains undecided.
+The migration is deployed to the Frankfurt development project [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml). The imported English snapshot contains 1,894 variants representing 1,100 game cards and 2,491 printings. Every imported data field was compared with the source, with zero mismatches. Personal collections and Auth contain no records. The browser app still uses its bundled catalog and IndexedDB; it does not connect to Supabase yet. The frontend framework remains undecided.
 
 ## Collection migration and backups
 
