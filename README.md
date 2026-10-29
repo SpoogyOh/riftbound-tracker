@@ -1,5 +1,7 @@
 # Riftbound Tracker
 
+> Keep It Simple, But Significant
+
 A browser-based collection tracker for Riftbound TCG. Track normal and foil copies, browse a card binder or table, check collection progress, and export your collection.
 
 Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The existing user interface uses German labels; card data is imported in English.
@@ -46,6 +48,8 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `types/openrift.ts` | Expected upstream fields consumed by the importer. | Update the OpenRift input contract. |
 | `types/browser.d.ts` | Declares the two generated catalog globals on `window`. | Change how browser scripts access the catalog. |
 | `tsconfig.json` | Strict type-checking scope for the first migration phase. | Add a source file as it is migrated. |
+| `supabase/` | Versioned PostgreSQL schema, access policies, quantity adjustment function, and local Supabase configuration. | Evolve the central database through new migrations. |
+| `docs/database.md` | Data model, setup steps, access rules, and boundaries of the database foundation. | Change the online-storage design or setup instructions. |
 | `scripts/import-openrift.mjs` | Downloads or reads OpenRift data, validates and normalizes it, groups normal/foil twins, and generates `cards.js`. | Change the data source or catalog mapping. |
 | `scripts/build-standalone.mjs` | Embeds the shared scripts into `index.html` to generate the single-file app. | Change how the standalone file is built. |
 | `riftbound_tracker.html` | Generated single-file version of the app. | Regenerate after shared source changes. |
@@ -54,6 +58,7 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `playwright.config.cjs` | Configures real-browser tests, Chrome, viewports, the local test server, and reports. | Change browser-test setup. |
 | `tests/catalog.test.mjs` | Tests catalog normalization, IDs, migration, quantities, and backup validation. | Verify data and migration changes. |
 | `tests/app.test.mjs` | Tests app initialization, controls, persistence, and fallbacks in jsdom with fake-indexeddb. | Verify app logic without launching a browser. |
+| `tests/database.test.mjs` | Applies the SQL migration to PGlite and verifies grants, user isolation, quantities, and data preservation. | Verify database changes. |
 | `tests/browser/tracker.spec.cjs` | End-to-end tests in real Chrome: migration, native IndexedDB, reload, backups, CSV, filters, variants, desktop/mobile-width views, and an actual image request. | Verify complete user flows. |
 | `.github/workflows/browser-test.yml` | GitHub Actions workflow that installs dependencies, runs the tests, and uploads browser reports/screenshots. | Change automated checks. |
 | `.gitignore` | Lists local caches, dependencies, temporary files, and reports that Git should not track. | Exclude another generated local artifact. |
@@ -103,7 +108,8 @@ npm ci
 | `npm run catalog:update` | Refreshes the English OpenRift catalog and generates `cards.js`. |
 | `npm run standalone:build` | Generates `riftbound_tracker.html` from the current shared source. |
 | `npm run typecheck` | Checks the shared TypeScript models and catalog importer. |
-| `npm test` | Runs the catalog and jsdom/storage tests without launching a browser. |
+| `npm test` | Runs catalog, jsdom/storage, and PostgreSQL database tests without launching a browser. |
+| `npm run test:database` | Runs only the database migration and access-control tests. |
 | `npm run test:browser` | Runs the Chrome end-to-end tests. |
 
 The browser-test configuration expects an installed Google Chrome and a `python3` executable. It starts a local server automatically, or reuses an existing server locally. The GitHub workflow runs on Ubuntu 24.04 with Chrome already installed.
@@ -130,6 +136,12 @@ npm run standalone:build
 ```
 
 The generated metadata records the import date and catalog size. A set is marked as a preview when its known English release date is in the future; a missing release date alone does not mark it as unreleased.
+
+## Online database foundation
+
+Supabase (PostgreSQL) is the selected backend for the future online app. The initial migration creates a shared card catalog and owner-scoped collection/custom-card tables, with explicit grants, Row Level Security, and a quantity adjustment function. See [docs/database.md](docs/database.md) for setup and the data model.
+
+This prepares the database layer only. The browser app still uses its bundled catalog and IndexedDB; it does not connect to Supabase yet. No hosted project, user account, catalog upload, or personal collection migration is created by the test suite. The frontend framework remains undecided.
 
 ## Collection migration and backups
 
