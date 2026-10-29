@@ -6,6 +6,7 @@
   <title>Riftbound TCG – Karten &amp; Foil Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    [hidden] { display: none !important; }
     button:disabled, input:disabled { opacity: .4; cursor: not-allowed; }
     @keyframes foilShimmer {
       0% { background-position: 0% 50%; }
@@ -107,6 +108,25 @@
       <p>Kartendaten: <a href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-indigo-300 underline">OpenRift</a> · <span id="catalogStatus"></span></p>
       <p id="storageStatus" role="status">Sammlung wird geladen …</p>
       <p>Riftbound Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
+    </section>
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3" aria-label="Konto und Online-Sammlung">
+      <h2 class="text-sm font-semibold">Deine Sammlung · lokal oder online</h2>
+      <form id="authForm" class="flex flex-wrap items-end gap-3">
+        <label class="text-xs text-slate-300">E-Mail
+          <input id="authEmail" type="email" required autocomplete="username" class="block mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm" />
+        </label>
+        <label class="text-xs text-slate-300">Passwort
+          <input id="authPassword" type="password" required minlength="8" autocomplete="current-password" class="block mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm" />
+        </label>
+        <button id="btnSignIn" type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm">Anmelden</button>
+        <button id="btnSignUp" type="button" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm">Konto erstellen</button>
+      </form>
+      <div id="authSignedIn" hidden class="flex flex-wrap items-center gap-3 text-sm">
+        <span id="authAccount"></span>
+        <button id="btnCloudRefresh" type="button" class="rounded-lg bg-indigo-600 px-3 py-2">Online neu laden</button>
+        <button id="btnSignOut" type="button" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">Abmelden</button>
+      </div>
+      <p id="authStatus" role="status" class="text-xs text-slate-400">Ohne Anmeldung bleibt die Sammlung lokal. Online sind Katalogkarten verfügbar; eigene Karten und Backup-Import bleiben im lokalen Modus.</p>
     </section>
     <!-- Stats Row -->
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -549,6 +569,7 @@
   <script src="cards.js"></script>
   <script src="collection.js"></script>
   <script src="storage.js"></script>
+  <script src="cloud.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

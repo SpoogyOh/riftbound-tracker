@@ -110,39 +110,49 @@ function handleCardImageError(imgEl, cardId) {
 }
 
 let persistenceEnabled = true;
+let cloud = null;
+let liveCatalog = null;
+let modalCloudToken;
+function currentCatalog() { return liveCatalog || window.DEFAULT_RIFTBOUND_CARDS || []; }
+function onlineMode() { return !!cloud && cloud.mode !== 'local'; }
 function setStorageStatus(message, error = false) {
   const el = document.getElementById('storageStatus');
   el.textContent = message;
   el.classList.toggle('text-red-300', error);
 }
-async function loadCollection() {
+async function loadCollection(isCurrent = () => true) {
   try {
-    state.cards = window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], await window.CollectionStorage.load());
+    const saved = await window.CollectionStorage.load();
+    if (!isCurrent()) return;
+    state.cards = window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], saved);
+    persistenceEnabled = true;
     const review = state.cards.filter(c => c.migrationReview).length;
     setStorageStatus(review ? `${review} bisherige Einträge zur Prüfung erhalten.` : 'Sammlung geladen.');
   } catch (error) {
+    if (!isCurrent()) return;
     persistenceEnabled = false;
     state.cards = (window.DEFAULT_RIFTBOUND_CARDS || []).map(c => ({...c}));
     setStorageStatus('Gespeicherte Sammlung konnte nicht gelesen werden. Bitte Backup sichern und Seite neu laden; Speichern ist gesperrt.', true);
   }
 }
 function saveCollection() {
-  if (!persistenceEnabled) return Promise.resolve(false);
-  const record = window.CollectionModel.snapshot(state.cards, window.DEFAULT_RIFTBOUND_CARDS || []);
+  if (!persistenceEnabled || onlineMode()) return Promise.resolve(false);
+  const record = window.CollectionModel.snapshot(state.cards, currentCatalog());
   setStorageStatus('Wird gespeichert …');
   return window.CollectionStorage.save(record).then(mode => {
-    setStorageStatus(`Gespeichert · ${mode}`);
+    if (!onlineMode()) setStorageStatus(`Gespeichert · ${mode}`);
     return true;
   }).catch(() => {
-    setStorageStatus('Speichern fehlgeschlagen. Bitte jetzt ein JSON-Backup herunterladen.', true);
+    if (!onlineMode()) setStorageStatus('Speichern fehlgeschlagen. Bitte jetzt ein JSON-Backup herunterladen.', true);
     return false;
   });
 }
 function cardDomains(card) { return card.domains?.length ? card.domains : [card.domain || 'Neutral']; }
 function cardLabel(card) {
-  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Vorschau]' : '') + (card.migrationReview ? ' [Zuordnung prüfen]' : '');
+  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Vorschau]' : '') + (card.migrationReview ? ' [Zuordnung prüfen]' : '') + (card.active === false ? ' [Archiviert]' : '');
 }
 function canCount(card, field) {
+  if (cloud?.locked) return false;
   return !card.finishes || (field === 'foil' ? card.finishes.includes('foil') : card.specialFinish || card.finishes.includes('normal'));
 }
 function refreshCatalogControls() {
@@ -159,7 +169,8 @@ function refreshCatalogControls() {
     if ([...el.options].some(o=>o.value===selected)) el.value=selected;
   }
   const meta=window.OPENRIFT_CATALOG_META;
-  if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount} Varianten · ${meta.printingCount} Druckeinträge · Stand ${meta.importedAt.slice(0,10)}`;
+  if (liveCatalog) document.getElementById('catalogStatus').textContent=`${liveCatalog.length} Varianten · Supabase`;
+  else if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount} Varianten · ${meta.printingCount} Druckeinträge · Stand ${meta.importedAt.slice(0,10)}`;
 }
 
 function getPlaysetTarget(card) {
@@ -172,6 +183,7 @@ function updateCardCount(cardId, field, newValue) {
   if (idx === -1) return;
   if (!canCount(state.cards[idx], field)) return;
   const cleanVal = Math.max(0, Math.min(999, parseInt(newValue, 10) || 0));
+  if (onlineMode()) return cloud.change(cardId, { [field]: cleanVal });
   state.cards[idx][field] = cleanVal;
   saveCollection();
   renderAll();
@@ -183,6 +195,11 @@ function updateCardCount(cardId, field, newValue) {
 function adjustCardCount(cardId, field, delta) {
   const idx = state.cards.findIndex(c => c.id === cardId);
   if (idx === -1) return;
+  if (!canCount(state.cards[idx], field)) return;
+  if (onlineMode()) {
+    if (state.cards[idx][field] + delta < 0 || state.cards[idx][field] + delta > 999) return;
+    return cloud.change(cardId, { finish: field, delta });
+  }
   const current = state.cards[idx][field] || 0;
   updateCardCount(cardId, field, current + delta);
 }
@@ -541,6 +558,13 @@ function renderGridCards(cards) {
 function renderAll() {
   renderStats();
   renderListAndGrid();
+  for (const id of ['btnOpenAddModal', 'btnEmptyAddCard', 'inputImportJSON']) {
+    document.getElementById(id).disabled = onlineMode();
+  }
+  document.querySelector('#quickAddForm button[type="submit"]').disabled = !!cloud?.locked;
+  document.querySelector('#modalCardForm button[type="submit"]').disabled = !!cloud?.locked;
+  document.getElementById('btnCloudRefresh').disabled = !!cloud?.busy;
+  if (state.activeLightboxCardId) syncLightboxView(state.activeLightboxCardId);
 }
 
 function openLightbox(cardId) {
@@ -587,6 +611,7 @@ function closeLightbox() {
 }
 
 function openAddModal(prefillName = '') {
+  if (onlineMode()) return;
   for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity','modalNormal','modalFoil']) document.getElementById(id).disabled=false;
   document.getElementById('modalTitle').textContent = 'Neue Riftbound-Karte hinzufügen';
   document.getElementById('modalCardId').value = '';
@@ -606,10 +631,11 @@ function openAddModal(prefillName = '') {
 
 function openEditModal(cardId) {
   const card = state.cards.find(c => c.id === cardId);
-  if (!card) return;
+  if (!card || cloud?.locked) return;
   for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity']) document.getElementById(id).disabled=card.source==='OpenRift';
   document.getElementById('modalNormal').disabled=!canCount(card,'normal');
   document.getElementById('modalFoil').disabled=!canCount(card,'foil');
+  modalCloudToken = cloud?.editToken(cardId);
   document.getElementById('modalTitle').textContent = 'Karte & Bild bearbeiten';
   document.getElementById('modalCardId').value = card.id;
   document.getElementById('modalNumber').value = card.number;
@@ -635,8 +661,16 @@ window.openLightbox = openLightbox;
 window.handleCardImageError = handleCardImageError;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadCollection();
-  refreshCatalogControls();
+  if (window.RiftboundCloud) {
+    cloud = window.RiftboundCloud.start({
+      status: setStorageStatus,
+      clear() { liveCatalog = null; state.cards = []; closeModal(); closeLightbox(); renderAll(); },
+      show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
+      async local(isCurrent) { await loadCollection(isCurrent); if (isCurrent()) refreshCatalogControls(); },
+      render: renderAll
+    });
+  }
+  if (!cloud) { await loadCollection(); refreshCatalogControls(); }
   renderAll();
 
   document.getElementById('btnCloseLightbox').addEventListener('click', closeLightbox);
@@ -758,8 +792,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnResetFilters').addEventListener('click', resetAllFilters);
   document.getElementById('btnEmptyReset').addEventListener('click', resetAllFilters);
 
-  document.getElementById('quickAddForm').addEventListener('submit', e => {
+  document.getElementById('quickAddForm').addEventListener('submit', async e => {
     e.preventDefault();
+    if (cloud?.locked) return;
     const rawInput = document.getElementById('quickCardInput').value.trim();
     if (!rawInput) return;
     const addNormal = Math.max(0, parseInt(document.getElementById('quickNormalDelta').value, 10) || 0);
@@ -787,6 +822,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (found && ((!canCount(found,'normal') && addNormal) || (!canCount(found,'foil') && addFoil))) {
       feedbackEl.textContent='Diese Ausführung ist im Katalog für das gewählte Finish nicht verfügbar.';
+      return;
+    }
+    if (onlineMode()) {
+      if (!found) { feedbackEl.textContent = 'Bitte eine Variante aus dem Online-Katalog auswählen. Eigene Karten bleiben lokal.'; return; }
+      // Both finish deltas form one revision-checked edit, so quick entry is all-or-nothing.
+      const ok = await cloud.change(found.id, { normal: Math.min(999, found.normal + addNormal), foil: Math.min(999, found.foil + addFoil) });
+      feedbackEl.textContent = ok ? '✔ Online gebucht.' : 'Nicht bestätigt. Bitte Speicherstatus und aktuellen Bestand prüfen.';
       return;
     }
     if (found) {
@@ -824,8 +866,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnCloseModal').addEventListener('click', closeModal);
   document.getElementById('btnCancelModal').addEventListener('click', closeModal);
 
-  document.getElementById('modalCardForm').addEventListener('submit', e => {
+  document.getElementById('modalCardForm').addEventListener('submit', async e => {
     e.preventDefault();
+    if (cloud?.locked) return;
     const existingId = document.getElementById('modalCardId').value;
     const number = document.getElementById('modalNumber').value.trim();
     const name = document.getElementById('modalName').value.trim();
@@ -833,11 +876,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const domain = document.getElementById('modalDomain').value;
     const type = document.getElementById('modalType').value;
     const rarity = document.getElementById('modalRarity').value;
-    const catalogCard = (window.DEFAULT_RIFTBOUND_CARDS || []).find(c => c.id === existingId);
+    const catalogCard = currentCatalog().find(c => c.id === existingId);
     const imageUrl = document.getElementById('modalImageUrl').value.trim() || catalogCard?.imageUrl || '';
     const normal = Math.max(0, parseInt(document.getElementById('modalNormal').value, 10) || 0);
     const foil = Math.max(0, parseInt(document.getElementById('modalFoil').value, 10) || 0);
 
+    if (onlineMode()) {
+      if (!catalogCard) return;
+      const ok = await cloud.change(existingId, { normal, foil, image_override: imageUrl === catalogCard.imageUrl ? null : imageUrl }, modalCloudToken);
+      if (ok) closeModal();
+      return;
+    }
     if (existingId) {
       const idx = state.cards.findIndex(c => c.id === existingId);
       if (idx !== -1) {
@@ -865,7 +914,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('btnExportJSON').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(window.CollectionModel.snapshot(state.cards, window.DEFAULT_RIFTBOUND_CARDS || []), null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(window.CollectionModel.snapshot(state.cards, currentCatalog()), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -875,11 +924,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('inputImportJSON').addEventListener('change', e => {
+    if (onlineMode()) return;
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
       try {
+        if (onlineMode()) return;
         const imported = JSON.parse(ev.target.result);
         const items=Array.isArray(imported) ? imported : imported.schemaVersion===3 ? imported.items : null;
         window.CollectionModel.validateItems(items);

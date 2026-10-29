@@ -2,7 +2,7 @@
 
 > Keep It Simple, But Significant
 
-Supabase is the selected backend. Start with a shared catalog and one private collection per user. The frontend framework is independent of this decision. This change provides a database migration and tests; the current browser app still uses its bundled catalog and local IndexedDB.
+Supabase is the selected backend. Start with a shared catalog and one private collection per user. The frontend framework is independent of this decision. The browser now includes a TypeScript Supabase adapter and email/password login. Local mode uses the bundled catalog and IndexedDB; signed-in mode reads the shared catalog and the private collection from Supabase.
 
 ## Development deployment
 
@@ -14,7 +14,7 @@ Supabase is the selected backend. Start with a shared catalog and one private co
 
 The catalog contains 1,894 active variants from the bundled OpenRift snapshot dated `2026-10-28T11:08:40.770Z`: 1,100 distinct game cards and 2,491 distinct English printing IDs. All imported fields were compared to the expected rows using PostgreSQL JSONB equality, with zero mismatches. Collection items and Auth users remain empty; RLS is enabled, anonymous catalog reads are denied, and authenticated catalog writes are denied.
 
-A hosted SQL smoke check previously created temporary user/variant fixtures in a transaction, exercised actual `auth.uid()`, roles, RLS and quantity constraints, then rolled everything back. Owner updates succeeded; cross-user reads/updates/inserts, anonymous access, client catalog writes, and negative quantities were rejected. Real login tokens, the Data API gateway and two-device behavior still need testing when the app is connected.
+A hosted SQL smoke check previously created temporary user/variant fixtures in a transaction, exercised actual `auth.uid()`, roles, RLS and quantity constraints, then rolled everything back. Owner updates succeeded; cross-user reads/updates/inserts, anonymous access, client catalog writes, and negative quantities were rejected. The browser publishable key was also tested against the hosted Auth settings endpoint (HTTP 200) and Data API: anonymous reads of both tables return HTTP 401 / PostgreSQL 42501, as intended. Hosted email sign-in and a two-device authenticated test with real accounts remain outstanding.
 
 The security advisor reported no findings after schema deployment. The performance advisor reported only an [unused index](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index) on `collection_items_variant_id_idx`, expected while the collection table is empty. Keep this foreign-key index for catalog reference checks.
 
@@ -28,7 +28,7 @@ The initial migration has now been deployed. Add a new migration for subsequent 
 | `public.catalog_variants` | One row per existing tracker variant, preserving `openrift-*` IDs. Normal/foil twins share a variant. | Authenticated users read; a trusted import process writes. |
 | `public.collection_items` | Normal/foil quantities and optional image override, keyed by `(user_id, variant_id)`. | Each signed-in user manages only their own rows. |
 
-Catalog columns hold the ID, underlying card ID, name, collector number, set, available finishes, active state, and import timestamp. Additional catalog fields belong in `details` (a JSON object), including provider printing IDs, image references, domains, rules, and other game metadata. This is not a direct copy of the browser `CatalogEntry` shape: the future adapter must map the database columns and details explicitly.
+Catalog columns hold the ID, underlying card ID, name, collector number, set, available finishes, active state, and import timestamp. Additional catalog fields belong in `details` (a JSON object), including provider printing IDs, image references, domains, rules, and other game metadata. This is not a direct copy of the browser `CatalogEntry` shape: the typed adapter maps the database columns and details explicitly.
 
 Owned quantities remain separate from the shared catalog. Missing catalog variants should be archived with `active = false`, not deleted; the foreign key blocks deletion of an owned variant. Existing quantities can still be reduced on archived variants.
 
@@ -58,7 +58,7 @@ npm run catalog:sql -- --input cards.js --output .cache/catalog-import.sql
 
 The generated SQL runs as one atomic `DO` statement. It serializes refreshes with an advisory lock and briefly blocks collection writes while checking compatibility. It upserts by the existing variant IDs, reactivates returning variants, and archives missing OpenRift variants. It never deletes variants or updates owned quantities. Changes to the identity or available finishes of an owned variant abort the import for review. Repeat imports preserve the same identities, data and quantities; `imported_at` records the latest refresh.
 
-The database rows retain the application fields, rules, images, provider printing IDs, `printingSizes`, and the source timestamp (`details.catalogImportedAt`). Personal counts and the duplicated raw `printings` objects are excluded. Full printing details remain in the bundled source and importer cache. The future browser adapter must use `printingSizes` where legacy matching previously inspected the raw printing objects, and must include archived variants referenced by owned items.
+The database rows retain the application fields, rules, images, provider printing IDs, `printingSizes`, and the source timestamp (`details.catalogImportedAt`). Personal counts and the duplicated raw `printings` objects are excluded. Full printing details remain in the bundled source and importer cache. The online adapter loads size summaries and includes archived variants referenced by collection rows. A future local-backup importer must use `printingSizes` where legacy matching previously inspected raw printing objects.
 
 The exporter prints counts and a SHA-256 of the normalized row payload. The first imported payload hash is `693d4688d6940bd53ecb6f641007fc594982185f8f2179e04f0535ee9056d702`. Generated SQL and compiled tools are ignored by Git. Data refreshes do not modify schema migrations.
 
@@ -83,7 +83,7 @@ npm run test:database
 
 Tests use PGlite, an embedded PostgreSQL engine, without a Docker dependency. They create minimal `auth.users`, `auth.uid()`, and role fixtures, then execute the actual migration. They verify anonymous denial, read-only catalog access, isolation between two user identities, valid owner CRUD, owner reassignment denial, quantity/finish constraints, rollback, catalog edits, and deletion behavior. The complete `npm test` command includes these tests, so CI runs them too.
 
-These tests do not exercise real login tokens, the Supabase API gateway, email delivery, or simultaneous requests from two devices. Verify those against a local full Supabase stack or a staging project before connecting real collection data.
+Additional SDK/jsdom tests and the Chrome flow use deterministic Auth/PostgREST responses. They verify pagination below the requested page size, isolated accounts, competing edits/inserts, lost responses without retries, session transitions, and preserved local records. They do not establish hosted email delivery or real authenticated two-device behavior. Complete the account test below before relying on online collection data.
 
 ## Apply to Supabase
 
@@ -110,17 +110,33 @@ The development project above is already provisioned and migrated. The following
    supabase gen types typescript --linked > types/database.generated.ts
    ```
 
-The repository's minimal `supabase/config.toml` targets PostgreSQL 17 for local development. Confirm the hosted project's version when linking. Its signup setting and localhost URL configure the local stack; a database push does not configure hosted Auth. Set hosted signup, callback URLs, login method, and email delivery separately when the login flow is implemented.
+The repository's minimal `supabase/config.toml` targets PostgreSQL 17 for local development. Confirm the hosted project's version when linking. Its signup setting and localhost URL configure the local stack; a database push does not configure hosted Auth. Configure the hosted email/password flow, callback URLs and email delivery separately as described below.
 
 For local full-stack development, `supabase start` requires a supported container runtime. `supabase db reset --local` rebuilds that disposable local database from migrations; do not use reset commands on a database containing collection data you need to retain.
 
-## Connect the application in the next phase
+## Authentication and first account test
 
-1. Keep the central catalog synchronized using the validated SQL export above. The initial full snapshot is already imported and verified.
-2. Add login and a typed Supabase data adapter. The configured API response limit is 1,000 rows, below the current 1,894 variants: paginate catalog reads rather than assuming one request returns everything.
-3. Show save success or failure explicitly. Use quantity deltas for counter buttons and revision-checked writes for direct edits.
-4. Import existing backups through the current matching/review logic. Make cloud imports transactional and idempotent and compare totals. If a backup contains custom or unresolved entries, the future importer must stop before writing, report those entries for review, and keep the original backup and local collection intact. Never silently skip their quantities. This migration does not import any collection automatically.
-5. Verify two real accounts cannot access each other's rows through the Data API, test a save/reload across two devices, and establish database backup/restore procedures.
+The browser uses the pinned `@supabase/supabase-js` package, a publishable key, persisted Auth sessions, and the existing owner-scoped policies. Each data client checks that the active session still belongs to its repository owner before supplying a request token. A session switch immediately clears the previous view and invalidates pending UI responses. Supabase remains responsible for authentication and authorization.
+
+Hosted settings checked on 2026-10-29: email authentication enabled, signup enabled, email confirmation required, anonymous sign-in disabled. No hosted settings or real accounts were changed by the integration.
+
+Before registering:
+
+1. In [Auth URL Configuration](https://supabase.com/dashboard/project/jhleumwhywdurherakml/auth/url-configuration), set the deployed HTTPS Site URL and allow the actual confirmation redirect URL. For the local server shown in the README, add `http://127.0.0.1:8765/`. Avoid broad production wildcards.
+2. In Auth email settings, configure your SMTP sender for real users. The [default sender](https://supabase.com/docs/guides/auth/auth-smtp) is restricted to organization team addresses and intended for initial testing. Keep email confirmation enabled.
+3. Open the app, create your own account, confirm the email, and sign in. No credentials should be posted to issues or chat. The confirmation link should return to the configured app URL.
+4. Sign in on a second device. Increment the same variant on both; reload and verify both changes remain. Test a stale absolute edit: the app should report a conflict and reload, rather than overwrite.
+5. Use a second real account to verify it starts with its own collection and cannot read or modify the first account's rows through the Data API. Export a backup, reload, sign out and confirm the local browser collection is still intact.
+
+The connector does not expose hosted Auth configuration updates, so these dashboard settings are documented. Password recovery UI, cloud backup restore and local-to-cloud transfer are follow-ups. Existing backups/custom or unresolved cards must remain intact until a transactional importer can report unsupported entries before writing.
+
+The online UI waits for write confirmation. Button adjustments use the existing atomic RPC with SDK retries explicitly disabled. Absolute edits, paired quick entry and image changes use revision-conditional updates or conflict-detecting first inserts. Old edit dialogs are invalidated after a refresh. After a failed/uncertain write, the controller reads the server state; if that read also fails, editing stays locked. Refresh on tab return or use the reload button; there is no live subscription or offline write queue.
+
+## Next integration steps
+
+1. Complete the hosted account and email test above, then choose a static host and configure its HTTPS URL.
+2. Add lossless local/backup transfer: validate all entries, stop on custom or unresolved cards, commit all supported changes transactionally and idempotently, then compare totals. Never silently skip quantities or replace a live collection with an old browser snapshot.
+3. Add password recovery and establish database backup/restore procedures before inviting other users.
 
 Browser configuration may contain the Supabase project URL and publishable key. Trusted import credentials and service-role/secret keys belong only in server or CI secrets, never in browser code or commits.
 
