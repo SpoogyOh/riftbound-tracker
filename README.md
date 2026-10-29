@@ -20,17 +20,33 @@ python3 -m http.server 8765 --bind 127.0.0.1
 
 Open <http://127.0.0.1:8765>. Node.js and npm are needed for development commands and catalog updates, not to run the bundled app. Styling uses Tailwind's CDN script; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
 
-Browser storage belongs to the browser profile and origin. Export a JSON backup before moving between a local file, a local server, or another domain. The app does not synchronize collections between devices.
+Browser storage belongs to the browser profile and origin. Export a JSON backup before moving between a local file, a local server, or another domain. Without signing in, the collection stays in that browser. Sign in to use your private Supabase collection from multiple devices. Local and online collections are separate; signing in never uploads or replaces your existing local records.
+
+## Use the online collection
+
+1. Serve the app over HTTP locally, or HTTPS on its eventual host. The `file:` standalone mode stays local.
+2. Use **Konto erstellen** to register, confirm your email, then sign in. An existing Supabase Auth account can sign in directly. Passwords are handled by Supabase Auth; the app does not store a separate password.
+3. Signed-in mode loads the online catalog and collection. All variants are paginated, so the default 1,000-row API cap does not truncate the catalog. Owned archived variants remain available.
+4. Add copies or edit counts. **Gespeichert · Supabase** confirms a server response. If a response is lost or an edit conflicts, the app reads the current server state and asks you to check it. It never repeats an uncertain increment automatically.
+5. **Online neu laden** fetches changes from another device. Signing out restores the separate local collection.
+
+The current project URL and publishable browser key are configured in `src/cloud.ts`; both are public configuration. There is no service-role/secret key in the client. RLS restricts collection rows to their owner.
+
+Local custom cards, unresolved legacy entries and backup imports remain in local mode. JSON/CSV export works online too, but cloud backup restore and local-to-cloud transfer are deferred until they can be atomic, reviewed and lossless. Do not expect an existing local collection to appear online automatically.
+
+Before the first hosted account test, configure the actual app URL and email delivery in Supabase as described in [docs/database.md](docs/database.md#authentication-and-first-account-test). The repository does not change hosted Auth settings. Real email delivery and authenticated production requests still require that account test. Password recovery UI is a follow-up; it is not included in this first login flow.
 
 ## Features
 
+- Email/password sign-in, registration with email confirmation, and a private online collection.
 - Separate normal and foil quantities, with buttons and direct number entry.
 - Table and binder views, card-image lightbox, foil effects, and collection statistics.
 - Quick entry by card name or collector number. Ambiguous matches require an explicit variant selection.
 - Filters for ownership, domains, set, card type, and rarity, plus several sorting options.
 - English card catalog imported from [OpenRift](https://openrift.app/developers).
 - IndexedDB persistence, a labeled localStorage fallback, JSON backup/restore, and CSV export.
-- Custom cards and custom image URLs or uploaded images.
+- Custom cards in local mode; custom image URLs or uploaded images in both modes.
+- Online changes confirmed by the server, atomic counter increments, conflict detection for absolute edits, and an explicit reload button.
 
 Normal/foil twins share one catalog row with two counters. Alternate art, signatures, promo markers, different sizes, and special metal finishes remain separate variants. The normal/special-finish counter stores metal copies; unavailable finishes are disabled. Catalog progress counts variants rather than only distinct game cards.
 
@@ -40,6 +56,12 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | --- | --- | --- |
 | `README.md` | Project overview, setup instructions, repository map, and data-flow guide. | Explain how to use or develop the project. |
 | `index.html` | Main page structure: buttons, forms, table, grid, dialogs, and custom CSS. Loads the shared JavaScript files. | Change the interface layout or add a control. |
+| `src/cloud.ts` | TypeScript login/session controller and account-bound Supabase clients. | Change authentication and online state transitions. |
+| `src/cloud-repository.ts` | Typed paginated catalog reads, private collection reads, atomic adjustments, and revision-checked edits. | Change online data access. |
+| `cloud.js` | Generated browser bundle including the pinned Supabase SDK. | Regenerate with `npm run build:browser`; edit `src/` instead. |
+| `scripts/build-browser.mjs` | Bundles the TypeScript online client using esbuild. | Change the browser build. |
+| `tests/cloud-repository.test.mjs` / `tests/cloud-app.test.mjs` | Exercise the real SDK against deterministic Auth/PostgREST responses: pagination, accounts, conflicts, failed writes, and local preservation. | Verify online behavior without sending email or writing real collections. |
+| `tests/browser/cloud.spec.cjs` | Two isolated Chrome sessions using a shared API fixture. | Verify online controls, reload, conflicts, and logout. |
 | `app.js` | Connects the interface to the data. Handles clicks, counters, filtering, rendering, statistics, images, and export/import actions. | Change how the app behaves. |
 | `collection.js` | Validates backup records, matches saved quantities to catalog entries, preserves uncertain legacy entries, and creates compact collection snapshots. | Change collection rules, migration, or the backup format. |
 | `storage.js` | Reads and writes collection snapshots in IndexedDB. Serializes writes and handles the localStorage fallback and legacy storage keys. | Change how personal collection data is persisted. |
@@ -80,16 +102,16 @@ The `.html` files describe web pages. The `.js` files contain browser-side JavaS
 3. `npm run standalone:build` regenerates `riftbound_tracker.html` from the shared files.
 4. The generated catalog is committed with the application source.
 
-The app uses this bundled catalog. It does not query the OpenRift catalog API on every page load. Card images are fetched separately when needed.
+Local mode uses this bundled catalog. Signed-in mode loads the catalog from Supabase, which is refreshed separately with `npm run catalog:sql`. It does not query the OpenRift catalog API on every page load. Card images are fetched separately when needed.
 
 ### Opening the app
 
-1. `index.html` loads `cards.js`, `collection.js`, `storage.js`, and `app.js` in that order.
-2. `app.js` asks `storage.js` for the saved collection.
-3. `collection.js` combines the current catalog with saved quantities and custom entries.
+1. `index.html` loads `cards.js`, `collection.js`, `storage.js`, the generated `cloud.js` client, and `app.js` in that order.
+2. The session controller selects local mode or the signed-in online collection. In local mode, `app.js` asks `storage.js` for the saved collection.
+3. In local mode, `collection.js` combines the catalog with saved quantities and custom entries. Online mode uses the typed repository to combine catalog rows and owned quantities.
 4. `app.js` renders the table/grid and updates the statistics.
 
-### Example: adding one normal copy
+### Example: adding one normal copy locally
 
 1. You click `+` on a card.
 2. The click handler in `app.js` increases that card's quantity in the current page state.
@@ -97,7 +119,9 @@ The app uses this bundled catalog. It does not query the OpenRift catalog API on
 4. `storage.js` saves the snapshot in IndexedDB, or uses the labeled fallback.
 5. `app.js` refreshes the displayed quantities and statistics.
 
-The shared card catalog answers **which cards exist**. Your browser collection answers **which copies you own**. Personal collection quantities are not uploaded to GitHub or written back to OpenRift.
+In online mode, `+`/`−` call the atomic database adjustment function. Direct quantity edits, quick entry and image edits check the saved revision so another device's changes cannot be silently overwritten. Reload or return to the tab to fetch newer server data; there is no live subscription or offline write queue.
+
+The shared card catalog answers **which cards exist**. Your browser collection answers **which copies you own**. Personal collection quantities are never uploaded to GitHub or OpenRift. Signed-in changes are stored in the user's private Supabase collection.
 
 ## Developer commands
 
@@ -112,8 +136,9 @@ npm ci
 | `npm run catalog:update` | Refreshes the English OpenRift catalog and generates `cards.js`. |
 | `npm run build:tools` | Compiles the TypeScript Node.js export tool. |
 | `npm run catalog:sql` | Validates `cards.js` and generates `.cache/catalog-import.sql` for a trusted Supabase import. |
-| `npm run standalone:build` | Generates `riftbound_tracker.html` from the current shared source. |
-| `npm run typecheck` | Checks the shared TypeScript models, catalog normalizer, and database export tool. |
+| `npm run build:browser` | Bundles the TypeScript online client and pinned SDK into `cloud.js`. |
+| `npm run standalone:build` | Builds the online client and generates `riftbound_tracker.html` from the current shared source. |
+| `npm run typecheck` | Checks the shared TypeScript models, catalog normalizer, database export tool, and online client. |
 | `npm test` | Runs catalog, jsdom/storage, and PostgreSQL database tests without launching a browser. |
 | `npm run test:database` | Builds the tool and runs the database migration, access-control, and catalog import tests. |
 | `npm run test:browser` | Runs the Chrome end-to-end tests. |
@@ -126,11 +151,11 @@ After changing the shared interface or JavaScript, regenerate the standalone fil
 
 The first phase defines shared models in `types/` and checks the existing importer through JSDoc type references, including the catalog entries it constructs. Run `npm run typecheck`; the same check runs in CI. TypeScript is pinned to the JavaScript-based 6.0.3 compiler for compatibility with restricted development environments.
 
-`allowJs` and `checkJs` let checked JavaScript coexist with TypeScript. `noEmit` means this phase does not add a browser build step or generate replacement runtime scripts. The large generated `cards.js` payload is outside the type-checking scope; its transformation is checked at the importer boundary. `collection.js`, `storage.js`, `app.js`, and the tests are outside the type-checking scope until their migration phases; the collection-backup types describe their current format but do not yet check their implementations.
+`allowJs` and `checkJs` let checked JavaScript coexist with TypeScript. `noEmit` keeps type checking separate from compilation. New online code in `src/` is TypeScript; esbuild creates the committed browser bundle. No frontend framework is required for this step. `skipLibCheck` skips a known mismatch between the SDK's bundled WebAuthn declarations and TypeScript 6 DOM declarations; project source remains strictly checked. The large generated `cards.js` payload is outside the type-checking scope; its transformation is checked at the importer boundary. `collection.js`, `storage.js`, `app.js`, and the tests are outside the type-checking scope until their migration phases; the collection-backup types describe their current format but do not yet check their implementations.
 
 Next, migrate the importer implementation to TypeScript, followed by collection/storage logic and finally the interface code. Keep the generated JavaScript and standalone HTML usable throughout. Type checking does not validate untrusted API responses or imported backups at runtime; the existing runtime checks and tests remain necessary.
 
-The Supabase export tool is implemented in TypeScript (`.mts`) and compiled for Node.js by `tsconfig.tools.json`. Test commands build it automatically. The browser runtime still uses the existing shared JavaScript files.
+The Supabase export tool is implemented in TypeScript (`.mts`) and compiled for Node.js by `tsconfig.tools.json`. Test commands build it automatically. The existing UI and local persistence still use shared JavaScript; the online controller and repository are TypeScript.
 
 ### Import behavior
 
@@ -147,9 +172,9 @@ The generated metadata records the import date and catalog size. A set is marked
 
 ## Online database foundation
 
-Supabase (PostgreSQL) is the selected backend for the future online app. The initial migration creates a shared card catalog and an owner-scoped collection table, with explicit grants, Row Level Security, and a quantity adjustment function. The first online version tracks catalog-backed cards; custom cards are deferred. See [docs/database.md](docs/database.md) for setup and the data model.
+Supabase (PostgreSQL) stores the shared catalog and private online collections. The initial migration creates a shared card catalog and an owner-scoped collection table, with explicit grants, Row Level Security, and a quantity adjustment function. The first online version tracks catalog-backed cards; custom cards are deferred. See [docs/database.md](docs/database.md) for setup and the data model.
 
-The migration is deployed to the Frankfurt development project [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml). The imported English snapshot contains 1,894 variants representing 1,100 game cards and 2,491 printings. Every imported data field was compared with the source, with zero mismatches. Personal collections and Auth contain no records. The browser app still uses its bundled catalog and IndexedDB; it does not connect to Supabase yet. The frontend framework remains undecided.
+The migration is deployed to the Frankfurt development project [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml). The imported English snapshot contains 1,894 variants representing 1,100 game cards and 2,491 printings. Every imported data field was compared with the source, with zero mismatches. Personal collections and Auth contain no records. Signed-in mode connects through the typed Supabase adapter; signed-out mode retains the bundled catalog and IndexedDB. Hosted email/account verification is the next deployment check. This integration keeps the existing interface and does not select a new frontend framework.
 
 ## Collection migration and backups
 
