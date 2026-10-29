@@ -12,9 +12,11 @@ Supabase is the selected backend. Start with a shared catalog and one private co
 - Applied migration: `20261029164445_initial_catalog_and_collection.sql`. The filename matches the version recorded by Supabase; its SQL is unchanged from the reviewed initial migration.
 - Database types: `types/database.generated.ts`, generated from the deployed schema.
 
-The two application tables and Supabase Auth have no persistent test or collection records. A hosted SQL smoke check created temporary user/variant fixtures in a transaction, exercised actual `auth.uid()`, roles, RLS and quantity constraints, then rolled everything back. Owner updates succeeded; cross-user reads/updates/inserts, anonymous access, client catalog writes, and negative quantities were rejected. Real login tokens, the Data API gateway and two-device behavior still need testing when the app is connected.
+The catalog contains 1,894 active variants from the bundled OpenRift snapshot dated `2026-10-28T11:08:40.770Z`: 1,100 distinct game cards and 2,491 distinct English printing IDs. All imported fields were compared to the expected rows using PostgreSQL JSONB equality, with zero mismatches. Collection items and Auth users remain empty; RLS is enabled, anonymous catalog reads are denied, and authenticated catalog writes are denied.
 
-The security advisor reported no findings. The performance advisor reported only an [unused index](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index) on `collection_items_variant_id_idx`, expected before the empty tables receive traffic. Keep this foreign-key index for catalog reference checks.
+A hosted SQL smoke check previously created temporary user/variant fixtures in a transaction, exercised actual `auth.uid()`, roles, RLS and quantity constraints, then rolled everything back. Owner updates succeeded; cross-user reads/updates/inserts, anonymous access, client catalog writes, and negative quantities were rejected. Real login tokens, the Data API gateway and two-device behavior still need testing when the app is connected.
+
+The security advisor reported no findings after schema deployment. The performance advisor reported only an [unused index](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index) on `collection_items_variant_id_idx`, expected while the collection table is empty. Keep this foreign-key index for catalog reference checks.
 
 The initial migration has now been deployed. Add a new migration for subsequent schema changes; do not edit the deployed SQL.
 
@@ -29,6 +31,36 @@ The initial migration has now been deployed. Add a new migration for subsequent 
 Catalog columns hold the ID, underlying card ID, name, collector number, set, available finishes, active state, and import timestamp. Additional catalog fields belong in `details` (a JSON object), including provider printing IDs, image references, domains, rules, and other game metadata. This is not a direct copy of the browser `CatalogEntry` shape: the future adapter must map the database columns and details explicitly.
 
 Owned quantities remain separate from the shared catalog. Missing catalog variants should be archived with `active = false`, not deleted; the foreign key blocks deletion of an owned variant. Existing quantities can still be reduced on archived variants.
+
+## Catalog import and refresh
+
+Generate the SQL from the reviewed browser snapshot:
+
+```bash
+npm run catalog:sql
+```
+
+This compiles `scripts/export-supabase-catalog.mts`, parses the two generated JSON assignments in `cards.js` without evaluating JavaScript, validates variant/printing identities and completeness, and writes `.cache/catalog-import.sql`. Apply that SQL through the Supabase SQL Editor, the Supabase connector, or a trusted database connection. Generating the file does not itself contact the database or require credentials.
+
+To refresh from OpenRift first, use the existing cached importer and rebuild the standalone app before generating the database import:
+
+```bash
+npm run catalog:update
+npm run standalone:build
+npm run catalog:sql
+```
+
+Optional input/output paths are supported:
+
+```bash
+npm run catalog:sql -- --input cards.js --output .cache/catalog-import.sql
+```
+
+The generated SQL runs as one atomic `DO` statement. It serializes refreshes with an advisory lock and briefly blocks collection writes while checking compatibility. It upserts by the existing variant IDs, reactivates returning variants, and archives missing OpenRift variants. It never deletes variants or updates owned quantities. Changes to the identity or available finishes of an owned variant abort the import for review. Repeat imports preserve the same identities, data and quantities; `imported_at` records the latest refresh.
+
+The database rows retain the application fields, rules, images, provider printing IDs, `printingSizes`, and the source timestamp (`details.catalogImportedAt`). Personal counts and the duplicated raw `printings` objects are excluded. Full printing details remain in the bundled source and importer cache. The future browser adapter must use `printingSizes` where legacy matching previously inspected the raw printing objects, and must include archived variants referenced by owned items.
+
+The exporter prints counts and a SHA-256 of the normalized row payload. The first imported payload hash is `693d4688d6940bd53ecb6f641007fc594982185f8f2179e04f0535ee9056d702`. Generated SQL and compiled tools are ignored by Git. Data refreshes do not modify schema migrations.
 
 ## Integrity and write behavior
 
@@ -84,7 +116,7 @@ For local full-stack development, `supabase start` requires a supported containe
 
 ## Connect the application in the next phase
 
-1. Build a trusted catalog import that upserts the existing variants, preserves provider printing IDs, and archives missing rows without deleting quantities. Keep full upstream data in the importer cache rather than duplicating raw printings in every client response.
+1. Keep the central catalog synchronized using the validated SQL export above. The initial full snapshot is already imported and verified.
 2. Add login and a typed Supabase data adapter. The configured API response limit is 1,000 rows, below the current 1,894 variants: paginate catalog reads rather than assuming one request returns everything.
 3. Show save success or failure explicitly. Use quantity deltas for counter buttons and revision-checked writes for direct edits.
 4. Import existing backups through the current matching/review logic. Make cloud imports transactional and idempotent and compare totals. If a backup contains custom or unresolved entries, the future importer must stop before writing, report those entries for review, and keep the original backup and local collection intact. Never silently skip their quantities. This migration does not import any collection automatically.

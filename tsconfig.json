@@ -11,5 +11,5 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["types/**/*.ts", "scripts/import-openrift.mjs"]
+  "include": ["types/**/*.ts", "scripts/import-openrift.mjs", "scripts/*.mts"]
 }

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": ".cache/tools"
+  },
+  "include": ["scripts/export-supabase-catalog.mts"]
+}
