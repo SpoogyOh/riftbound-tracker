@@ -5,13 +5,20 @@ import { resolve } from 'node:path';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const endpoint = 'https://openrift.app/api/v1/catalog?langs=EN';
+/** @param {unknown} value */
 const title = value => String(value || '').replace(/(^|[- ])\w/g, c => c.toUpperCase());
 
 // Finish is deliberately excluded: ordinary normal/foil twins share two counters.
 // Signed, promo, art, size and special metal finishes remain distinct variants.
+/**
+ * @param {import('../types/openrift.js').OpenRiftCatalog} raw
+ * @param {string} [importedAt]
+ * @returns {import('../types/models.js').NormalizedCatalog}
+ */
 export function normalizeCatalog(raw, importedAt = new Date().toISOString()) {
   if (!Array.isArray(raw.sets) || !raw.cards || !raw.printings) throw new Error('Invalid OpenRift catalog');
   const sets = new Map(raw.sets.map(s => [s.id, s]));
+  /** @type {Map<string, import('../types/models.js').Printing[]>} */
   const buckets = new Map();
   for (const [id, p] of Object.entries(raw.printings)) {
     if (p.language !== 'EN') continue;
@@ -21,9 +28,11 @@ export function normalizeCatalog(raw, importedAt = new Date().toISOString()) {
     const key = JSON.stringify([p.cardId, p.setId, p.shortCode, p.publicCode, p.artVariant,
       p.isSigned, [...(p.markers || [])].sort(), p.size, p.language,
       ['normal', 'foil'].includes(p.finish) ? 'standard' : p.finish]);
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push({ ...p, id });
+    const bucket = buckets.get(key) || [];
+    bucket.push({ ...p, id });
+    buckets.set(key, bucket);
   }
+  /** @type {import('../types/models.js').CatalogEntry[]} */
   const cards = [];
   for (const [key, bucket] of buckets) {
     // Ambiguous same-finish entries must never be silently merged.
@@ -34,6 +43,7 @@ export function normalizeCatalog(raw, importedAt = new Date().toISOString()) {
       const p = printings.find(x => x.finish === 'normal') || printings[0];
       const c = raw.cards[p.cardId];
       const set = sets.get(p.setId);
+      if (!set) throw new Error(`Unknown set: ${p.setId}`);
       const imageId = p.images?.[0]?.imageId;
       const specialFinish = !['normal','foil'].includes(p.finish);
       const labels = [p.artVariant !== 'normal' && title(p.artVariant), p.isSigned && 'Signature',
@@ -71,6 +81,7 @@ export function normalizeCatalog(raw, importedAt = new Date().toISOString()) {
     sets: raw.sets.map(s=>({code:s.slug,name:s.name,releases:s.releases})) } };
 }
 
+/** @param {string} path @param {string} content */
 async function atomicWrite(path, content) {
   await writeFile(path + '.tmp', content);
   await rename(path + '.tmp', path);
@@ -81,6 +92,7 @@ export async function updateCatalog() {
   await mkdir(cacheDir, { recursive: true });
   const cachePath = resolve(cacheDir, 'openrift.json');
   const metadataPath = resolve(cacheDir, 'openrift-http.json');
+  /** @type {{ fetchedAt: number, etag?: string | null } | undefined} */
   let metadata;
   try { metadata = JSON.parse(await readFile(metadataPath, 'utf8')); } catch {}
   let rawText;
@@ -91,6 +103,7 @@ export async function updateCatalog() {
     rawText = await readFile(cachePath, 'utf8');
     console.log('Using OpenRift cache (minimum one hour).');
   } else {
+    /** @type {Record<string, string>} */
     const headers = { Accept: 'application/json', 'User-Agent': 'RiftboundTracker/0.1 (+https://github.com/SpoogyOh/riftbound-tracker)' };
     if (metadata?.etag) headers['If-None-Match'] = metadata.etag;
     const response = await fetch(endpoint, { headers, signal: AbortSignal.timeout(45000) });
