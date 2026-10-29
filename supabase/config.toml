@@ -1,0 +1,16 @@
+project_id = "riftbound-tracker"
+
+[api]
+enabled = true
+schemas = ["public"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[auth]
+site_url = "http://127.0.0.1:8765"
+enable_signup = false
