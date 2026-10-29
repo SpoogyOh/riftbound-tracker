@@ -45,6 +45,7 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `storage.js` | Reads and writes collection snapshots in IndexedDB. Serializes writes and handles the localStorage fallback and legacy storage keys. | Change how personal collection data is persisted. |
 | `cards.js` | Generated card catalog, variant IDs, metadata, rules text, values, keywords, tags, image references, and underlying printing details. | Regenerate it with the importer. |
 | `types/models.ts` | Shared TypeScript models for catalog rows, physical printings, metadata, quantities, and collection backups. | Change the data contracts as features evolve. |
+| `types/database.generated.ts` | TypeScript types generated from the deployed Supabase database. | Regenerate after applying schema migrations. |
 | `types/openrift.ts` | Expected upstream fields consumed by the importer. | Update the OpenRift input contract. |
 | `types/browser.d.ts` | Declares the two generated catalog globals on `window`. | Change how browser scripts access the catalog. |
 | `tsconfig.json` | Strict type-checking scope for the first migration phase. | Add a source file as it is migrated. |
@@ -141,7 +142,7 @@ The generated metadata records the import date and catalog size. A set is marked
 
 Supabase (PostgreSQL) is the selected backend for the future online app. The initial migration creates a shared card catalog and an owner-scoped collection table, with explicit grants, Row Level Security, and a quantity adjustment function. The first online version tracks catalog-backed cards; custom cards are deferred. See [docs/database.md](docs/database.md) for setup and the data model.
 
-This prepares the database layer only. The browser app still uses its bundled catalog and IndexedDB; it does not connect to Supabase yet. No hosted project, user account, catalog upload, or personal collection migration is created by the test suite. The frontend framework remains undecided.
+The migration is deployed to the Frankfurt development project [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml). Database-role smoke checks passed, and their temporary fixtures were rolled back. The catalog and personal collection tables are still empty. The browser app still uses its bundled catalog and IndexedDB; it does not connect to Supabase yet. The frontend framework remains undecided.
 
 ## Collection migration and backups
 

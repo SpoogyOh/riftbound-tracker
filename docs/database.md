@@ -4,6 +4,20 @@
 
 Supabase is the selected backend. Start with a shared catalog and one private collection per user. The frontend framework is independent of this decision. This change provides a database migration and tests; the current browser app still uses its bundled catalog and local IndexedDB.
 
+## Development deployment
+
+- Project: [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml), reference `jhleumwhywdurherakml`.
+- Region: Frankfurt (`eu-central-1`), PostgreSQL 17.
+- API URL: `https://jhleumwhywdurherakml.supabase.co`.
+- Applied migration: `20261029164445_initial_catalog_and_collection.sql`. The filename matches the version recorded by Supabase; its SQL is unchanged from the reviewed initial migration.
+- Database types: `types/database.generated.ts`, generated from the deployed schema.
+
+The two application tables and Supabase Auth have no persistent test or collection records. A hosted SQL smoke check created temporary user/variant fixtures in a transaction, exercised actual `auth.uid()`, roles, RLS and quantity constraints, then rolled everything back. Owner updates succeeded; cross-user reads/updates/inserts, anonymous access, client catalog writes, and negative quantities were rejected. Real login tokens, the Data API gateway and two-device behavior still need testing when the app is connected.
+
+The security advisor reported no findings. The performance advisor reported only an [unused index](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index) on `collection_items_variant_id_idx`, expected before the empty tables receive traffic. Keep this foreign-key index for catalog reference checks.
+
+The initial migration has now been deployed. Add a new migration for subsequent schema changes; do not edit the deployed SQL.
+
 ## Data model
 
 | Table | Purpose | Access |
@@ -41,18 +55,18 @@ These tests do not exercise real login tokens, the Supabase API gateway, email d
 
 ## Apply to Supabase
 
-Use a fresh development project for the first application of this initial migration. No cloud project is created by this repository.
+The development project above is already provisioned and migrated. The following commands describe how to link a local checkout or deploy the versioned schema to another fresh development project.
 
 1. Create or select a Supabase development project and choose its region.
 2. Install the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) and authenticate it through `supabase login`.
 3. Link the project and review the migration plan:
 
    ```bash
-   supabase link --project-ref YOUR_PROJECT_REF
+   supabase link --project-ref jhleumwhywdurherakml
    supabase db push --dry-run
    ```
 
-4. Apply the reviewed migration:
+4. Apply pending reviewed migrations (the existing initial migration is already recorded in the linked development project):
 
    ```bash
    supabase db push

@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const alice = '11111111-1111-4111-8111-111111111111';
 const bob = '22222222-2222-4222-8222-222222222222';
-const migration = await readFile(new URL('../supabase/migrations/20261029150000_initial_catalog_and_collection.sql', import.meta.url), 'utf8');
+const migration = await readFile(new URL('../supabase/migrations/20261029164445_initial_catalog_and_collection.sql', import.meta.url), 'utf8');
 
 // These fixtures replace Supabase Auth only. All application SQL, grants, RLS,
 // functions and constraints execute in a real PostgreSQL engine via PGlite.
