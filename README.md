@@ -139,7 +139,7 @@ The generated metadata records the import date and catalog size. A set is marked
 
 ## Online database foundation
 
-Supabase (PostgreSQL) is the selected backend for the future online app. The initial migration creates a shared card catalog and owner-scoped collection/custom-card tables, with explicit grants, Row Level Security, and a quantity adjustment function. See [docs/database.md](docs/database.md) for setup and the data model.
+Supabase (PostgreSQL) is the selected backend for the future online app. The initial migration creates a shared card catalog and an owner-scoped collection table, with explicit grants, Row Level Security, and a quantity adjustment function. The first online version tracks catalog-backed cards; custom cards are deferred. See [docs/database.md](docs/database.md) for setup and the data model.
 
 This prepares the database layer only. The browser app still uses its bundled catalog and IndexedDB; it does not connect to Supabase yet. No hosted project, user account, catalog upload, or personal collection migration is created by the test suite. The frontend framework remains undecided.
 

@@ -36,23 +36,6 @@ create table public.collection_items (
 -- The primary key indexes owner-scoped reads; this index supports the catalog FK.
 create index collection_items_variant_id_idx on public.collection_items(variant_id);
 
-create table public.custom_cards (
-  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  id text not null check (length(id) > 0),
-  name text not null check (length(trim(name)) > 0),
-  number text not null,
-  normal smallint not null default 0 check (normal between 0 and 999),
-  foil smallint not null default 0 check (foil between 0 and 999),
-  migration_review boolean not null default false,
-  details jsonb not null default '{}'::jsonb check (jsonb_typeof(details) = 'object'),
-  revision bigint not null default 0 check (revision >= 0),
-  updated_at timestamptz not null default now(),
-  primary key (user_id, id)
-);
-
-comment on table public.custom_cards is
-  'Private custom and unresolved historical entries. IDs may retain an old openrift-* ID when migration cannot match it.';
-
 create function private.stamp_collection_write()
 returns trigger language plpgsql security invoker set search_path = '' as $$
 begin
@@ -83,19 +66,16 @@ create trigger collection_items_check_finishes before insert or update on public
   for each row execute function private.check_collection_finishes();
 create trigger collection_items_stamp before insert or update on public.collection_items
   for each row execute function private.stamp_collection_write();
-create trigger custom_cards_stamp before insert or update on public.custom_cards
-  for each row execute function private.stamp_collection_write();
 
 alter table public.catalog_variants enable row level security;
 alter table public.collection_items enable row level security;
-alter table public.custom_cards enable row level security;
 
 -- Policies and grants are both required. Clear permissive Supabase defaults explicitly.
-revoke all on public.catalog_variants, public.collection_items, public.custom_cards
+revoke all on public.catalog_variants, public.collection_items
   from public, anon, authenticated;
 grant select on public.catalog_variants to authenticated;
-grant select, insert, update, delete on public.collection_items, public.custom_cards to authenticated;
-grant all on public.catalog_variants, public.collection_items, public.custom_cards to service_role;
+grant select, insert, update, delete on public.collection_items to authenticated;
+grant all on public.catalog_variants, public.collection_items to service_role;
 
 create policy catalog_read on public.catalog_variants for select to authenticated using (true);
 
@@ -106,15 +86,6 @@ create policy collection_insert on public.collection_items for insert to authent
 create policy collection_update on public.collection_items for update to authenticated
   using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy collection_delete on public.collection_items for delete to authenticated
-  using ((select auth.uid()) = user_id);
-
-create policy custom_read on public.custom_cards for select to authenticated
-  using ((select auth.uid()) = user_id);
-create policy custom_insert on public.custom_cards for insert to authenticated
-  with check ((select auth.uid()) = user_id);
-create policy custom_update on public.custom_cards for update to authenticated
-  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
-create policy custom_delete on public.custom_cards for delete to authenticated
   using ((select auth.uid()) = user_id);
 
 -- A row-level SQL increment avoids read-modify-write loss across devices.

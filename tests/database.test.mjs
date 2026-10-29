@@ -48,7 +48,7 @@ const denied = { code: '42501' };
 test('anonymous access and catalog writes are denied; signed-in catalog reads work', async t => {
   const db = await database(t);
   await db.exec('set role anon;');
-  for (const table of ['catalog_variants', 'collection_items', 'custom_cards']) {
+  for (const table of ['catalog_variants', 'collection_items']) {
     await assert.rejects(db.query(`select * from public.${table}`), denied);
     await assert.rejects(db.query(`delete from public.${table}`), denied);
   }
@@ -56,8 +56,6 @@ test('anonymous access and catalog writes are denied; signed-in catalog reads wo
   await assert.rejects(db.query("update public.catalog_variants set name='Changed'"), denied);
   await assert.rejects(db.query("insert into public.collection_items(user_id,variant_id) values ($1,'openrift-standard')", [alice]), denied);
   await assert.rejects(db.query('update public.collection_items set normal=1'), denied);
-  await assert.rejects(db.query("insert into public.custom_cards(user_id,id,name,number) values ($1,'custom','Custom','C')", [alice]), denied);
-  await assert.rejects(db.query('update public.custom_cards set normal=1'), denied);
   await assert.rejects(db.query("select public.adjust_collection_quantity('openrift-standard','normal',1)"), denied);
   await asUser(db);
   assert.equal((await db.query('select * from public.catalog_variants')).rows.length, 3);
@@ -82,25 +80,6 @@ test('users can manage their own collection but cannot read, alter or reassign a
   await asUser(db);
   assert.deepEqual((await db.query('select normal,foil from public.collection_items')).rows, [{normal:2,foil:3}]);
   assert.equal((await db.query('delete from public.collection_items returning *')).rows.length, 1);
-});
-
-test('custom and unresolved entries stay private and preserve legacy details', async t => {
-  const db = await database(t);
-  await asUser(db);
-  await db.query(`insert into public.custom_cards(id,name,number,normal,migration_review,details)
-    values ('openrift-missing','Unresolved card','OLD-001',4,true,$1)`, [{imageUrl:'data:image/png;base64,AA==',legacyField:'preserved'}]);
-  assert.equal((await db.query('update public.custom_cards set foil=2 returning foil')).rows[0].foil, 2);
-  await assert.rejects(db.query('update public.custom_cards set user_id=$1', [bob]), denied);
-  await asUser(db, bob);
-  assert.equal((await db.query('select * from public.custom_cards')).rows.length, 0);
-  assert.equal((await db.query('update public.custom_cards set normal=99 returning *')).rows.length, 0);
-  assert.equal((await db.query('delete from public.custom_cards returning *')).rows.length, 0);
-  await assert.rejects(db.query("insert into public.custom_cards(user_id,id,name,number) values ($1,'x','Other','X')", [alice]), denied);
-  await asUser(db);
-  const row = (await db.query('select * from public.custom_cards')).rows[0];
-  assert.equal(row.normal, 4);
-  assert.equal(row.details.legacyField, 'preserved');
-  assert.equal((await db.query('delete from public.custom_cards returning *')).rows.length, 1);
 });
 
 test('quantity adjustments enforce limits and finish availability and roll back failed changes', async t => {
@@ -136,10 +115,8 @@ test('catalog edits preserve quantities; owned variants cannot be deleted and us
     error => ['23001', '23503'].includes(error.code));
   await asUser(db);
   assert.equal((await db.query('select normal from public.collection_items')).rows[0].normal, 5);
-  await db.query("insert into public.custom_cards(id,name,number) values ('custom','Custom','C')");
   await db.exec('reset role;');
   await db.query('delete from auth.users where id=$1', [alice]);
   assert.equal((await db.query('select * from public.collection_items')).rows.length, 0);
-  assert.equal((await db.query('select * from public.custom_cards')).rows.length, 0);
   assert.equal((await db.query('select * from public.catalog_variants')).rows.length, 3);
 });
