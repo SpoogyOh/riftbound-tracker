@@ -1,101 +1,137 @@
-# Riftbound TCG – Karten- & Foil-Tracker 🃏✨
+# Riftbound Tracker
 
-Ein moderner, intuitiver Tracker für deine **Riftbound TCG** Kartensammlung (League of Legends Trading Card Game).
+A browser-based collection tracker for Riftbound TCG. Track normal and foil copies, browse a card binder or table, check collection progress, and export your collection.
 
-Ermöglicht das unkomplizierte Zählen von **Normal-** und **Foil-Kopien**, Überwachen von Playsets (3×) und Durchsuchen deiner Sammlung im digitalen Sammelalbum-Stil (Binder).
+Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The existing user interface uses German labels; card data is imported in English.
 
-![Riftbound Tracker Preview](https://img.shields.io/badge/Riftbound-TCG_Tracker-indigo?style=for-the-badge)
+## Run the app
 
----
+Clone the repository and open `index.html` in a browser. The generated `riftbound_tracker.html` offers the same app in one HTML file.
 
-## ✨ Features
+For a consistent local web address, serve the repository directory with Python 3:
 
-- **Getrennte Zähler für Normal & Foil ✨:**
-  - Jede Karte verfügt über eigenständige `+` / `−` Buttons sowie direkte Zahleneingabe für Standard- und Foil-Kopien.
-  - Dynamischer **Holo-Foil Glanzeffekt** auf Kartenbildern, sobald mindestens eine Foil-Kopie im Besitz ist.
-- **Digitales Sammelalbum (Binder Look):**
-  - **Karten-Grid:** Schicke 5:7 TCG-Kartenansicht mit Nummer, Domain-Badges und Foil-Status.
-  - **Sammelalbum-Effekt:** Noch nicht besessene Karten (0 Kopien) werden dezent abgedunkelt dargestellt und erstrahlen in voller Farbe, sobald die erste Kopie eingetragen wird.
-  - **Listen-Ansicht:** Kompakte Tabelle mit Mini-Thumbnails für ultraschnelles Eintragen großer Mengen.
-  - **Lightbox / Großansicht:** Klick auf ein Kartenbild öffnet eine detailreiche Großansicht mit direkten `+` / `−` Zählern.
-- **⚡ Schnelleingabe (Booster / Stapel scannen):**
-  - Tippe einfach Name oder Sammlernummer (z. B. `OGN-001` oder `Jinx`) ein, wähle Normal/Foil und buche Karten in Sekundenschnelle ein.
-- **Englischer OpenRift-Katalog & SVG-Fallback:**
-  - Bildreferenzen aus OpenRift, einschließlich Sondervarianten.
-  - Ausfallsicherer **SVG-Karten-Generator** für Offline-Nutzung.
-  - Eigene Bild-URLs oder Bilddatei-Uploads direkt im Bearbeiten-Dialog.
-- **Live-Statistiken:**
-  - Gesamtkarten (Kopien), Normal/Foil-Aufteilung, prozentualer Sammlungs-Fortschritt und Anzahl vollständiger Playsets.
-- **Filter & Sortierung:**
-  - Nach Domain (*Fury* 🔴, *Calm* 🟢, *Mind* 🔵, *Body* 🟡, *Chaos* 🟣, *Order* 🟠, *Neutral* ⚪).
-  - Nach Besitzstatus (*Alle*, *Im Besitz*, *Nur Foil ✨*, *Fehlend*, *Playset offen < 3*, *Playset voll 3+*).
-  - Nach Seltenheit (*Common*, *Uncommon*, *Rare*, *Epic*, *Showcase / Alt-Art*), Set und Kartentyp.
-- **Datensicherheit & Export:**
-  - Automatische Speicherung im Browser via IndexedDB, mit `localStorage` als Fallback.
-  - **CSV-Export** (kompatibel mit Excel, Google Sheets, LibreOffice).
-  - **JSON-Backup** zum Sichern und Wiederherstellen auf jedem Gerät.
-
----
-
-## 🚀 Installation & Start
-
-Da der Tracker rein clientseitig (HTML5, Tailwind CSS, Vanilla JS) entwickelt ist, ist keine komplexe Server-Installation erforderlich:
-
-1. **Repository klonen:**
-   ```bash
-   git clone https://github.com/SpoogyOh/riftbound-tracker.git
-   cd riftbound-tracker
-   ```
-
-2. **Direkt im Browser öffnen:**
-   Öffne einfach die Datei `index.html` in deinem favorisierten Webbrowser (Chrome, Safari, Firefox, Edge).
-
----
-
-## 📁 Projektstruktur
-
-```
-riftbound-tracker/
-├── index.html              # Hauptseite & Benutzeroberfläche (Standalone-Browser)
-├── cards.js                # Vorkonfigurierter Riftbound-Katalog (Origins OGN)
-├── app.js                  # Anwendungslogik, State Management, Filter & Export
-├── riftbound_tracker.html  # All-in-One Version (für Antigravity / Inline-Vorschau)
-├── chat-verlauf.md         # Dokumentation der Projektentwicklung
-└── README.md               # Projektdokumentation
+```bash
+git clone https://github.com/SpoogyOh/riftbound-tracker.git
+cd riftbound-tracker
+python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
----
+Open <http://127.0.0.1:8765>. Node.js and npm are needed for development commands and catalog updates, not to run the bundled app. Styling uses Tailwind's CDN script; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
 
-## 📄 Lizenz
+Browser storage belongs to the browser profile and origin. Export a JSON backup before moving between a local file, a local server, or another domain. The app does not synchronize collections between devices.
 
-MIT License – Frei zur persönlichen und Community-Nutzung.
-Riftbound TCG und zugehörige Artworks sind Marken von Riot Games.
+## Features
 
-## OpenRift-Katalog und Speicherung
+- Separate normal and foil quantities, with buttons and direct number entry.
+- Table and binder views, card-image lightbox, foil effects, and collection statistics.
+- Quick entry by card name or collector number. Ambiguous matches require an explicit variant selection.
+- Filters for ownership, domains, set, card type, and rarity, plus several sorting options.
+- English card catalog imported from [OpenRift](https://openrift.app/developers).
+- IndexedDB persistence, a labeled localStorage fallback, JSON backup/restore, and CSV export.
+- Custom cards and custom image URLs or uploaded images.
 
-Der mitgelieferte englische Katalog wird aus [OpenRift](https://openrift.app/developers) erzeugt. Die Karten verlinken auf ihre OpenRift-Seiten. Kartenbilder werden bei Bedarf geladen, nicht als Bildarchiv mitgeliefert. Stand und Variantenanzahl erscheinen direkt in der App.
+Normal/foil twins share one catalog row with two counters. Alternate art, signatures, promo markers, different sizes, and special metal finishes remain separate variants. The normal/special-finish counter stores metal copies; unavailable finishes are disabled. Catalog progress counts variants rather than only distinct game cards.
 
-Normal-/Foil-Zwillinge teilen eine Zeile mit zwei Zählern. Alt-Art, signierte Ausgaben, Promostempel, unterschiedliche Größen und Sonderfinishes bleiben getrennt. Bei mehrdeutigen Druckeinträgen wird nicht automatisch zusammengefasst. Metallausgaben verwenden den Zähler „Normal / Sonderfinish“ und zeigen ihre Ausführung an. Nicht verfügbare Finishes sind gesperrt. Die Zahlen zählen Katalogvarianten, nicht nur unterschiedliche Spielkarten. Sets ohne bekannten englischen Erscheinungstermin sind nicht automatisch als unveröffentlicht eingestuft.
+## Repository map
 
-### Katalog aktualisieren (Node.js 22+)
+| File or directory | Responsibility | When to change it |
+| --- | --- | --- |
+| `README.md` | Project overview, setup instructions, repository map, and data-flow guide. | Explain how to use or develop the project. |
+| `index.html` | Main page structure: buttons, forms, table, grid, dialogs, and custom CSS. Loads the shared JavaScript files. | Change the interface layout or add a control. |
+| `app.js` | Connects the interface to the data. Handles clicks, counters, filtering, rendering, statistics, images, and export/import actions. | Change how the app behaves. |
+| `collection.js` | Validates backup records, matches saved quantities to catalog entries, preserves uncertain legacy entries, and creates compact collection snapshots. | Change collection rules, migration, or the backup format. |
+| `storage.js` | Reads and writes collection snapshots in IndexedDB. Serializes writes and handles the localStorage fallback and legacy storage keys. | Change how personal collection data is persisted. |
+| `cards.js` | Generated card catalog, variant IDs, metadata, rules text, values, keywords, tags, image references, and underlying printing details. | Regenerate it with the importer. |
+| `scripts/import-openrift.mjs` | Downloads or reads OpenRift data, validates and normalizes it, groups normal/foil twins, and generates `cards.js`. | Change the data source or catalog mapping. |
+| `scripts/build-standalone.mjs` | Embeds the shared scripts into `index.html` to generate the single-file app. | Change how the standalone file is built. |
+| `riftbound_tracker.html` | Generated single-file version of the app. | Regenerate after shared source changes. |
+| `package.json` | Lists development commands, the supported Node.js version, and development dependencies. | Add a command or dependency. |
+| `package-lock.json` | Records exact dependency versions and integrity hashes for reproducible installs. | Let npm update it when dependencies change. |
+| `playwright.config.cjs` | Configures real-browser tests, Chrome, viewports, the local test server, and reports. | Change browser-test setup. |
+| `tests/catalog.test.mjs` | Tests catalog normalization, IDs, migration, quantities, and backup validation. | Verify data and migration changes. |
+| `tests/app.test.mjs` | Tests app initialization, controls, persistence, and fallbacks in jsdom with fake-indexeddb. | Verify app logic without launching a browser. |
+| `tests/browser/tracker.spec.cjs` | End-to-end tests in real Chrome: migration, native IndexedDB, reload, backups, CSV, filters, variants, desktop/mobile-width views, and an actual image request. | Verify complete user flows. |
+| `.github/workflows/browser-test.yml` | GitHub Actions workflow that installs dependencies, runs the tests, and uploads browser reports/screenshots. | Change automated checks. |
+| `.gitignore` | Lists local caches, dependencies, temporary files, and reports that Git should not track. | Exclude another generated local artifact. |
+| `AGENTS.md` | Repository language and development conventions for coding assistants. | Update project-wide working conventions. |
+| `chat-verlauf.md` | Historical German conversation notes from the initial project creation. | Consult for background; it is not current technical documentation. |
+
+The `.html` files describe web pages. The `.js` files contain browser-side JavaScript. The `.mjs` scripts run with Node.js, outside the browser. The `.cjs` files use the CommonJS module format for test configuration/code. Markdown (`.md`) files are documentation; JSON files hold structured configuration/data; YAML (`.yml`) defines the GitHub workflow.
+
+## How the pieces work together
+
+### Catalog updates
+
+1. The developer runs `npm run catalog:update`.
+2. `scripts/import-openrift.mjs` reads the English OpenRift catalog and generates `cards.js`.
+3. `npm run standalone:build` regenerates `riftbound_tracker.html` from the shared files.
+4. The generated catalog is committed with the application source.
+
+The app uses this bundled catalog. It does not query the OpenRift catalog API on every page load. Card images are fetched separately when needed.
+
+### Opening the app
+
+1. `index.html` loads `cards.js`, `collection.js`, `storage.js`, and `app.js` in that order.
+2. `app.js` asks `storage.js` for the saved collection.
+3. `collection.js` combines the current catalog with saved quantities and custom entries.
+4. `app.js` renders the table/grid and updates the statistics.
+
+### Example: adding one normal copy
+
+1. You click `+` on a card.
+2. The click handler in `app.js` increases that card's quantity in the current page state.
+3. `collection.js` creates a snapshot of personal quantities, custom cards, and image overrides.
+4. `storage.js` saves the snapshot in IndexedDB, or uses the labeled fallback.
+5. `app.js` refreshes the displayed quantities and statistics.
+
+The shared card catalog answers **which cards exist**. Your browser collection answers **which copies you own**. Personal collection quantities are not uploaded to GitHub or written back to OpenRift.
+
+## Developer commands
+
+Use Node.js 22 or newer. Install the development dependencies with:
 
 ```bash
 npm ci
-npm run catalog:update
-npm run standalone:build
-npm test
 ```
 
-Der Import benötigt keinen API-Key und verwendet einen identifizierenden User-Agent mit Projekt-URL. Die Rohantwort und der ETag werden lokal unter `.cache/` aufbewahrt. Innerhalb einer Stunde erfolgt kein erneuter Abruf; danach wird `If-None-Match` verwendet. HTTP-Fehler ersetzen den vorhandenen Katalog nicht; es gibt keine automatischen Wiederholungsschleifen. Für eine vorhandene Rohantwort: `node scripts/import-openrift.mjs --input /pfad/catalog.json`.
+| Command | What it does |
+| --- | --- |
+| `npm run catalog:update` | Refreshes the English OpenRift catalog and generates `cards.js`. |
+| `npm run standalone:build` | Generates `riftbound_tracker.html` from the current shared source. |
+| `npm test` | Runs the catalog and jsdom/storage tests without launching a browser. |
+| `npm run test:browser` | Runs the Chrome end-to-end tests. |
 
-`cards.js` enthält normalisierte Varianten einschließlich der zugrunde liegenden OpenRift-Druckeinträge, Regeltexte, Werte, Keywords, Tags und Bildreferenzen. `collection.js` übernimmt Zuordnung und Backups; `storage.js` speichert den persönlichen Bestand in IndexedDB. Falls IndexedDB nicht verfügbar ist, dient `localStorage` als gekennzeichneter Fallback. Speicherfehler werden sichtbar gemeldet. Die bestehende Oberfläche läuft weiterhin über `index.html`; die Einzeldatei `riftbound_tracker.html` wird aus denselben Quelldateien generiert.
+The browser-test configuration expects an installed Google Chrome and a `python3` executable. It starts a local server automatically, or reuses an existing server locally. The GitHub workflow runs on Ubuntu 24.04 with Chrome already installed.
 
-### Bestehende Sammlung und Backups
+After changing the shared interface or JavaScript, regenerate the standalone file and run the relevant tests. After changing only documentation, check the text, commands, and file links; rebuilding the catalog is unnecessary.
 
-Vor dem Wechsel bitte ein JSON-Backup herunterladen. Alte V1-/V2-Speicherschlüssel bleiben erhalten. Einträge werden nur bei eindeutiger Übereinstimmung von Nummer und Kartenname der normalen Standardvariante zugeordnet. Abweichende Namen, unklare Varianten oder inzwischen entfernte Karten bleiben mit „Zuordnung prüfen“ erhalten; ihre Zähler werden nicht verworfen. Neue Katalogeinträge erscheinen auch bei bestehenden Sammlungen.
+### Import behavior
 
-Neue JSON-Backups verwenden `schemaVersion: 3` und enthalten Bestände und eigene Einträge separat vom Katalog. Alte JSON-Listen können weiterhin importiert werden. Der Import validiert die Daten vor dem Ersetzen. CSV enthält Varianten-ID, Variantenbezeichnung und Finishes. Browserdaten sind an das Browserprofil und den Ursprung gebunden; beim Wechsel von `file://` zu einem lokalen Server oder einer anderen Domain bitte per JSON exportieren/importieren. IndexedDB synchronisiert nicht zwischen Geräten.
+The importer requires no API key. It sends a project-identifying User-Agent, caches the raw response and ETag locally for at least one hour, and uses `If-None-Match` for later updates. HTTP errors do not replace the existing generated catalog. There are no automatic retry loops.
 
-### Quellenhinweis
+To normalize an existing raw response instead of making an API request:
 
-OpenRift ist eine Community-Quelle und kann keine Rechte an Riot-Inhalten vergeben. Es gelten die [Riftbound-Richtlinien von Riot](https://developer.riotgames.com/policies/riftbound). Die technische Integration ist keine Zusicherung einer Riot-Freigabe.
+```bash
+node scripts/import-openrift.mjs --input /path/to/catalog.json
+npm run standalone:build
+```
+
+The generated metadata records the import date and catalog size. A set is marked as a preview when its known English release date is in the future; a missing release date alone does not mark it as unreleased.
+
+## Collection migration and backups
+
+Download a JSON backup before switching versions. The old V1/V2 localStorage keys remain intact during migration.
+
+Legacy entries are assigned to a standard catalog variant only when the card number and normalized name match unambiguously. Conflicting names, ambiguous variants, or removed entries remain available for review with their quantities preserved. New catalog variants appear even when a collection was saved with an older catalog.
+
+Current JSON backups use `schemaVersion: 3`. They contain the personal collection separately from the generated catalog. Old JSON-list backups can still be imported; validation occurs before replacing the current collection. CSV exports include variant IDs, variant descriptions, and finishes.
+
+IndexedDB and localStorage are browser storage, not a cloud account. Browser data can be cleared, so keep JSON backups for copies you want to retain independently of the browser profile.
+
+## Source and licensing notes
+
+Card data comes from [OpenRift](https://openrift.app/developers), a community source. Card names link to OpenRift card pages. Images are loaded on demand rather than redistributed as a bulk image archive.
+
+Riftbound and its associated artwork belong to Riot Games. OpenRift cannot grant rights to Riot's content; see the [Riftbound developer policies](https://developer.riotgames.com/policies/riftbound).
+
+The original project documentation describes the code as MIT-licensed. A separate `LICENSE` file has not yet been checked in. The code-license statement does not grant rights to card data or artwork.
