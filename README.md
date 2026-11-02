@@ -42,6 +42,10 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `collection.js` | Validates backup records, matches saved quantities to catalog entries, preserves uncertain legacy entries, and creates compact collection snapshots. | Change collection rules, migration, or the backup format. |
 | `storage.js` | Reads and writes collection snapshots in IndexedDB. Serializes writes and handles the localStorage fallback and legacy storage keys. | Change how personal collection data is persisted. |
 | `cards.js` | Generated card catalog, variant IDs, metadata, rules text, values, keywords, tags, image references, and underlying printing details. | Regenerate it with the importer. |
+| `types/models.ts` | Shared TypeScript models for catalog rows, physical printings, metadata, quantities, and collection backups. | Change the data contracts as features evolve. |
+| `types/openrift.ts` | Expected upstream fields consumed by the importer. | Update the OpenRift input contract. |
+| `types/browser.d.ts` | Declares the two generated catalog globals on `window`. | Change how browser scripts access the catalog. |
+| `tsconfig.json` | Strict type-checking scope for the first migration phase. | Add a source file as it is migrated. |
 | `scripts/import-openrift.mjs` | Downloads or reads OpenRift data, validates and normalizes it, groups normal/foil twins, and generates `cards.js`. | Change the data source or catalog mapping. |
 | `scripts/build-standalone.mjs` | Embeds the shared scripts into `index.html` to generate the single-file app. | Change how the standalone file is built. |
 | `riftbound_tracker.html` | Generated single-file version of the app. | Regenerate after shared source changes. |
@@ -98,12 +102,21 @@ npm ci
 | --- | --- |
 | `npm run catalog:update` | Refreshes the English OpenRift catalog and generates `cards.js`. |
 | `npm run standalone:build` | Generates `riftbound_tracker.html` from the current shared source. |
+| `npm run typecheck` | Checks the shared TypeScript models and catalog importer. |
 | `npm test` | Runs the catalog and jsdom/storage tests without launching a browser. |
 | `npm run test:browser` | Runs the Chrome end-to-end tests. |
 
 The browser-test configuration expects an installed Google Chrome and a `python3` executable. It starts a local server automatically, or reuses an existing server locally. The GitHub workflow runs on Ubuntu 24.04 with Chrome already installed.
 
 After changing the shared interface or JavaScript, regenerate the standalone file and run the relevant tests. After changing only documentation, check the text, commands, and file links; rebuilding the catalog is unnecessary.
+
+### Gradual TypeScript migration
+
+The first phase defines shared models in `types/` and checks the existing importer through JSDoc type references, including the catalog entries it constructs. Run `npm run typecheck`; the same check runs in CI. TypeScript is pinned to the JavaScript-based 6.0.3 compiler for compatibility with restricted development environments.
+
+`allowJs` and `checkJs` let checked JavaScript coexist with TypeScript. `noEmit` means this phase does not add a browser build step or generate replacement runtime scripts. The large generated `cards.js` payload is outside the type-checking scope; its transformation is checked at the importer boundary. `collection.js`, `storage.js`, `app.js`, and the tests are outside the type-checking scope until their migration phases; the collection-backup types describe their current format but do not yet check their implementations.
+
+Next, migrate the importer implementation to TypeScript, followed by collection/storage logic and finally the interface code. Keep the generated JavaScript and standalone HTML usable throughout. Type checking does not validate untrusted API responses or imported backups at runtime; the existing runtime checks and tests remain necessary.
 
 ### Import behavior
 
