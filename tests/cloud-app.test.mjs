@@ -111,6 +111,50 @@ test('a late write response from a signed-out account never appears in the next 
   assert.equal(state.rows.get(`${bob}:${sample.id}`).normal,9);
 });
 
+for (const failRecovery of [false, true]) {
+  test(`a late ${failRecovery ? 'failed' : 'successful'} recovery read never changes the next account's view`, async t=>{
+    const state=apiFixture(undefined,[collectionRow(bob,sample.id,9)]);
+    const fetch=state.fetch;
+    let release, held=false, recovering=false;
+    const pause=new Promise(resolve=>{release=resolve;});
+    t.after(()=>release());
+    state.fetch=async (input,init)=>{
+      const response=await fetch(input,init);
+      const url=new URL(String(input));
+      // Hold the last page, after the account token has been checked and all data read.
+      if (recovering && !held && url.pathname.endsWith('/collection_items')
+        && url.searchParams.get('user_id')===`eq.${alice}` && url.searchParams.get('offset')==='1') {
+        held=true;
+        await pause;
+        if (failRecovery) return new Response(JSON.stringify({code:'42501',message:'Read denied'}),
+          {status:403,headers:{'Content-Type':'application/json'}});
+      }
+      return response;
+    };
+    const {w,d,text,signIn}=await app(t,state);
+    await signIn();
+    await waitFor(()=>text('storageStatus').includes('Online-Sammlung geladen'));
+    recovering=true; state.loseWrite=true;
+    const pending=w.adjustCardCount(sample.id,'normal',1);
+    await waitFor(()=>held);
+    d.getElementById('btnSignOut').click();
+    await waitFor(()=>text('authStatus').startsWith('Lokale Sammlung'));
+    await signIn('bob@example.test');
+    await waitFor(()=>text('statTotalCopies')==='9');
+    const status=text('storageStatus');
+    release(); await pending;
+    w.openEditModal(sample.id);
+    assert.equal(d.getElementById('modalNormal').value,'9');
+    assert.equal(text('statTotalCopies'),'9');
+    assert.equal(text('authAccount'),'bob@example.test');
+    assert.equal(text('storageStatus'),status);
+    assert.equal(d.querySelector('#quickAddForm button[type="submit"]').disabled,false);
+    assert.equal((await w.CollectionStorage.load())[0].normal,5);
+    assert.equal(state.rows.get(`${alice}:${sample.id}`).normal,1);
+    assert.equal(state.rows.get(`${bob}:${sample.id}`).normal,9);
+  });
+}
+
 test('registration waits for email confirmation and clears the password without creating a local session', async t=>{
   const state=apiFixture(), {d,text}=await app(t,state);
   d.getElementById('authEmail').value='alice@example.test';

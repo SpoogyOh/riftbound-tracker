@@ -123,10 +123,13 @@ class CloudController {
       // Read after any uncertain response; never replay an increment or overwrite a conflict.
       this.ready = false;
       try {
-        this.bridge.show(await repository.load(), repository.catalog);
+        const cards = await repository.load();
+        if (generation !== this.generation) return false;
+        this.bridge.show(cards, repository.catalog);
         this.ready = true;
         this.bridge.status('Änderung nicht bestätigt oder Konflikt mit einem anderen Gerät. Aktueller Serverstand geladen; bitte Bestand prüfen.', true);
       } catch {
+        if (generation !== this.generation) return false;
         this.bridge.status('Verbindung unterbrochen. Speichern ist gesperrt. Bitte neu laden und Bestand prüfen.', true);
       }
       return false;
