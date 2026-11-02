@@ -9,12 +9,13 @@ Supabase is the selected backend. Start with a shared catalog and one private co
 - Project: [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml), reference `jhleumwhywdurherakml`.
 - Region: Frankfurt (`eu-central-1`), PostgreSQL 17.
 - API URL: `https://jhleumwhywdurherakml.supabase.co`.
+- Hosted test app: <https://riftbound-tracker-test.opiola-daniel.chatgpt.site/>.
 - Applied migration: `20261029164445_initial_catalog_and_collection.sql`. The filename matches the version recorded by Supabase; its SQL is unchanged from the reviewed initial migration.
 - Database types: `types/database.generated.ts`, generated from the deployed schema.
 
-The catalog contains 1,894 active variants from the bundled OpenRift snapshot dated `2026-10-28T11:08:40.770Z`: 1,100 distinct game cards and 2,491 distinct English printing IDs. All imported fields were compared to the expected rows using PostgreSQL JSONB equality, with zero mismatches. Collection items and Auth users remain empty; RLS is enabled, anonymous catalog reads are denied, and authenticated catalog writes are denied.
+The catalog contains 1,894 active variants from the bundled OpenRift snapshot dated `2026-10-28T11:08:40.770Z`: 1,100 distinct game cards and 2,491 distinct English printing IDs. All imported fields were compared to the expected rows using PostgreSQL JSONB equality, with zero mismatches. Collection items and Auth users were empty at the 2026-10-29 import verification; this is a historical snapshot, not the current account or collection count. RLS is enabled, anonymous catalog reads are denied, and authenticated catalog writes are denied.
 
-A hosted SQL smoke check previously created temporary user/variant fixtures in a transaction, exercised actual `auth.uid()`, roles, RLS and quantity constraints, then rolled everything back. Owner updates succeeded; cross-user reads/updates/inserts, anonymous access, client catalog writes, and negative quantities were rejected. The browser publishable key was also tested against the hosted Auth settings endpoint (HTTP 200) and Data API: anonymous reads of both tables return HTTP 401 / PostgreSQL 42501, as intended. Hosted email sign-in and a two-device authenticated test with real accounts remain outstanding.
+A hosted SQL smoke check previously created temporary user/variant fixtures in a transaction, exercised actual `auth.uid()`, roles, RLS and quantity constraints, then rolled everything back. Owner updates succeeded; cross-user reads/updates/inserts, anonymous access, client catalog writes, and negative quantities were rejected. The browser publishable key was also tested against the hosted Auth settings endpoint (HTTP 200) and Data API: anonymous reads of both tables return HTTP 401 / PostgreSQL 42501, as intended. The owner subsequently reported successful hosted sign-in and collection checks with real accounts in two browser sessions; see the verification record below.
 
 The security advisor reported no findings after schema deployment. The performance advisor reported only an [unused index](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index) on `collection_items_variant_id_idx`, expected while the collection table is empty. Keep this foreign-key index for catalog reference checks.
 
@@ -66,7 +67,7 @@ The exporter prints counts and a SHA-256 of the normalized row payload. The firs
 
 - Counts are integers between 0 and 999, matching the existing backup validator.
 - Normal and foil quantities must match the variant's available finishes. Metal variants continue using the current normal/special-finish counter.
-- A trigger sets `updated_at` and increments `revision` on collection updates. A future absolute-value editor should use `revision` as an optimistic concurrency condition and detect zero updated rows.
+- A trigger sets `updated_at` and increments `revision` on collection updates. The online absolute-value editor uses `revision` as an optimistic concurrency condition and detects zero updated rows.
 - `adjust_collection_quantity(p_variant_id, p_finish, p_delta)` changes one catalog-backed quantity using an atomic SQL update. It derives the owner from `auth.uid()`, runs with caller permissions, and remains subject to RLS. Negative or overflowing results fail and roll back.
 - A delta is not idempotent: after a timeout, read the stored result before deciding whether to repeat it. Do not automatically retry an uncertain increment.
 - Direct catalog writes are reserved for the trusted importer. Before changing a variant's identity or finish availability, check affected quantities; a catalog metadata update does not automatically revalidate existing rows or remap them.
@@ -83,7 +84,7 @@ npm run test:database
 
 Tests use PGlite, an embedded PostgreSQL engine, without a Docker dependency. They create minimal `auth.users`, `auth.uid()`, and role fixtures, then execute the actual migration. They verify anonymous denial, read-only catalog access, isolation between two user identities, valid owner CRUD, owner reassignment denial, quantity/finish constraints, rollback, catalog edits, and deletion behavior. The complete `npm test` command includes these tests, so CI runs them too.
 
-Additional SDK/jsdom tests and the Chrome flow use deterministic Auth/PostgREST responses. They verify pagination below the requested page size, isolated accounts, competing edits/inserts, lost responses without retries, session transitions, and preserved local records. They do not establish hosted email delivery or real authenticated two-device behavior. Complete the account test below before relying on online collection data.
+Additional SDK/jsdom tests and the Chrome flow use deterministic Auth/PostgREST responses. They verify pagination below the requested page size, isolated accounts, competing edits/inserts, lost responses without retries, session transitions, and preserved local records. They do not establish hosted email delivery or real authenticated multi-session behavior. The separate manual verification record below lists which hosted flows the owner tested.
 
 ## Apply to Supabase
 
@@ -132,9 +133,23 @@ The connector does not expose hosted Auth configuration updates, so these dashbo
 
 The online UI waits for write confirmation. Button adjustments use the existing atomic RPC with SDK retries explicitly disabled. Absolute edits, paired quick entry and image changes use revision-conditional updates or conflict-detecting first inserts. Old edit dialogs are invalidated after a refresh. After a failed/uncertain write, the controller reads the server state; if that read also fails, editing stays locked. Refresh on tab return or use the reload button; there is no live subscription or offline write queue.
 
+### Hosted test verification
+
+On 2026-11-02, the owner reported completing the following manual smoke checks at <https://riftbound-tracker-test.opiola-daniel.chatgpt.site/>:
+
+- Sign-in with a real account succeeded.
+- A quantity change remained saved after reloading the page.
+- A second independent browser session with the same account showed the same collection.
+- Incrementing the same variant once in each session preserved both increments after an online reload.
+- A second real account had a separate collection and did not show the first account's quantities in the UI.
+
+These are user-reported functional checks, not an independent security audit. They do not confirm fresh signup/email delivery, stale absolute-edit conflict handling on the hosted backend, direct cross-account Data API denial with real tokens, logout/local-data preservation, or two physical devices. Automated fixture and PostgreSQL tests cover several of these cases separately. No credentials or personal collection quantities are recorded here.
+
+The deployed source commit was not verified. Merging code to `main` does not by itself demonstrate that this preview has been updated; redeploy and check the served version after code changes. The test URL is not a production-hosting commitment.
+
 ## Next integration steps
 
-1. Complete the hosted account and email test above, then choose a static host and configure its HTTPS URL.
+1. Complete the remaining hosted registration/email, conflict, direct API isolation, and logout checks above. Verify the deployed source version and configure production hosting separately.
 2. Add lossless local/backup transfer: validate all entries, stop on custom or unresolved cards, commit all supported changes transactionally and idempotently, then compare totals. Never silently skip quantities or replace a live collection with an old browser snapshot.
 3. Add password recovery and establish database backup/restore procedures before inviting other users.
 

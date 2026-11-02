@@ -4,6 +4,8 @@
 
 A browser-based collection tracker for Riftbound TCG. Track normal and foil copies, browse a card binder or table, check collection progress, and export your collection.
 
+Hosted test environment: <https://riftbound-tracker-test.opiola-daniel.chatgpt.site/>. The owner reported successful login, persisted quantities, shared counts across two browser sessions, concurrent increments, and separate collections for two accounts on 2026-11-02. See the [verification record](docs/database.md#hosted-test-verification) for scope and remaining checks.
+
 Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The existing user interface uses German labels; card data is imported in English.
 
 ## Run the app
@@ -24,7 +26,7 @@ Browser storage belongs to the browser profile and origin. Export a JSON backup 
 
 ## Use the online collection
 
-1. Serve the app over HTTP locally, or HTTPS on its eventual host. The `file:` standalone mode stays local.
+1. Open the hosted test environment linked above, or serve the app over HTTP locally. The `file:` standalone mode stays local.
 2. Use **Konto erstellen** to register, confirm your email, then sign in. An existing Supabase Auth account can sign in directly. Passwords are handled by Supabase Auth; the app does not store a separate password.
 3. Signed-in mode loads the online catalog and collection. All variants are paginated, so the default 1,000-row API cap does not truncate the catalog. Owned archived variants remain available.
 4. Add copies or edit counts. **Gespeichert · Supabase** confirms a server response. If a response is lost or an edit conflicts, the app reads the current server state and asks you to check it. It never repeats an uncertain increment automatically.
@@ -34,7 +36,7 @@ The current project URL and publishable browser key are configured in `src/cloud
 
 Local custom cards, unresolved legacy entries and backup imports remain in local mode. JSON/CSV export works online too, but cloud backup restore and local-to-cloud transfer are deferred until they can be atomic, reviewed and lossless. Do not expect an existing local collection to appear online automatically.
 
-Before the first hosted account test, configure the actual app URL and email delivery in Supabase as described in [docs/database.md](docs/database.md#authentication-and-first-account-test). The repository does not change hosted Auth settings. Real email delivery and authenticated production requests still require that account test. Password recovery UI is a follow-up; it is not included in this first login flow.
+When setting up another host, configure its app URL and email delivery in Supabase as described in [docs/database.md](docs/database.md#authentication-and-first-account-test). The repository does not change hosted Auth settings. The hosted smoke test does not establish fresh registration/email delivery or production readiness. Password recovery UI is a follow-up; it is not included in this first login flow.
 
 ## Features
 
@@ -174,7 +176,7 @@ The generated metadata records the import date and catalog size. A set is marked
 
 Supabase (PostgreSQL) stores the shared catalog and private online collections. The initial migration creates a shared card catalog and an owner-scoped collection table, with explicit grants, Row Level Security, and a quantity adjustment function. The first online version tracks catalog-backed cards; custom cards are deferred. See [docs/database.md](docs/database.md) for setup and the data model.
 
-The migration is deployed to the Frankfurt development project [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml). The imported English snapshot contains 1,894 variants representing 1,100 game cards and 2,491 printings. Every imported data field was compared with the source, with zero mismatches. Personal collections and Auth contain no records. Signed-in mode connects through the typed Supabase adapter; signed-out mode retains the bundled catalog and IndexedDB. Hosted email/account verification is the next deployment check. This integration keeps the existing interface and does not select a new frontend framework.
+The migration is deployed to the Frankfurt development project [riftbound-tracker](https://supabase.com/dashboard/project/jhleumwhywdurherakml). The imported English snapshot contains 1,894 variants representing 1,100 game cards and 2,491 printings. Every imported data field was compared with the source, with zero mismatches. The empty collection/Auth state recorded at catalog import was historical; real accounts have since been used for the hosted smoke test. Signed-in mode connects through the typed Supabase adapter; signed-out mode retains the bundled catalog and IndexedDB. The hosted verification record distinguishes the confirmed basic flows from outstanding deployment checks. This integration keeps the existing interface and does not select a new frontend framework.
 
 ## Collection migration and backups
 
