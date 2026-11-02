@@ -18,6 +18,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run standalone:build
+      - run: git diff --exit-code -- cloud.js riftbound_tracker.html
       - name: Installed Chrome
         run: google-chrome --version
       - run: npm run test:browser

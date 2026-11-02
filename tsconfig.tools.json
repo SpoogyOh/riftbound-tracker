@@ -5,5 +5,5 @@
     "rootDir": ".",
     "outDir": ".cache/tools"
   },
-  "include": ["scripts/export-supabase-catalog.mts"]
+  "include": ["scripts/export-supabase-catalog.mts", "src/cloud-repository.ts"]
 }

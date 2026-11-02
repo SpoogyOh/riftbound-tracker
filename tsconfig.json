@@ -9,7 +9,8 @@
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
   },
-  "include": ["types/**/*.ts", "scripts/import-openrift.mjs", "scripts/*.mts"]
+  "include": ["types/**/*.ts", "scripts/import-openrift.mjs", "scripts/*.mts", "src/**/*.ts"]
 }
