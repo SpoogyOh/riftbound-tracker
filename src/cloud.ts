@@ -39,8 +39,16 @@ class CloudController {
     element('btnSignUp').addEventListener('click', () => { void this.authenticate(true); });
     element('btnSignOut').addEventListener('click', () => { void this.signOut(); });
     element('btnCloudRefresh').addEventListener('click', () => { void this.refresh(); });
+    element('btnResetPassword').addEventListener('click', () => { void this.requestPasswordReset(); });
+    element('authRecoveryForm').addEventListener('submit', event => { event.preventDefault(); void this.setPassword(); });
     // Schedule API work outside the Auth callback to avoid holding the session lock.
-    client.auth.onAuthStateChange((_event, session) => { this.sessionChanged(session); });
+    client.auth.onAuthStateChange((event, session) => {
+      this.sessionChanged(session);
+      if (event === 'PASSWORD_RECOVERY') {
+        element('authRecoveryForm').hidden = false;
+        this.message('Bitte neues Passwort festlegen.');
+      }
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.mode === 'cloud' && this.ready && !this.busy) void this.refresh();
     });
@@ -60,6 +68,7 @@ class CloudController {
     element('authAccount').textContent = session?.user.email ?? '';
     element('authForm').hidden = !!session;
     element('authSignedIn').hidden = !session;
+    if (!session) element('authRecoveryForm').hidden = true;
     setTimeout(() => {
       if (generation !== this.generation) return;
       if (nextId) {
@@ -141,7 +150,32 @@ class CloudController {
   private message(message: string): void { element('authStatus').textContent = message; }
   private setAuthBusy(value: boolean): void {
     this.authBusy = value;
-    for (const id of ['btnSignIn', 'btnSignUp', 'btnSignOut']) element<HTMLButtonElement>(id).disabled = value;
+    for (const id of ['btnSignIn', 'btnSignUp', 'btnSignOut', 'btnResetPassword', 'btnSetPassword']) element<HTMLButtonElement>(id).disabled = value;
+  }
+  private async requestPasswordReset(): Promise<void> {
+    const email = element<HTMLInputElement>('authEmail');
+    if (this.authBusy || !email.reportValidity()) return;
+    this.setAuthBusy(true);
+    try {
+      const { error } = await client.auth.resetPasswordForEmail(email.value.trim(), { redirectTo: location.origin + location.pathname });
+      if (error) throw error;
+      // Neutral wording: do not reveal whether an account exists for this address.
+      this.message('Falls ein Konto existiert, wurde eine E-Mail zum Zurücksetzen gesendet.');
+    } catch { this.message('E-Mail zum Zurücksetzen konnte nicht angefordert werden. Bitte E-Mail-Adresse und Verbindung prüfen.'); }
+    finally { this.setAuthBusy(false); }
+  }
+  private async setPassword(): Promise<void> {
+    const form = element<HTMLFormElement>('authRecoveryForm'), input = element<HTMLInputElement>('authNewPassword');
+    if (this.authBusy || !form.reportValidity()) return;
+    this.setAuthBusy(true);
+    try {
+      const { error } = await client.auth.updateUser({ password: input.value });
+      if (error) throw error;
+      input.value = '';
+      form.hidden = true;
+      this.message('Passwort geändert.');
+    } catch { this.message('Passwort konnte nicht geändert werden. Bitte erneut versuchen oder einen neuen Link anfordern.'); }
+    finally { this.setAuthBusy(false); }
   }
   private async authenticate(signUp: boolean): Promise<void> {
     const form = element<HTMLFormElement>('authForm');

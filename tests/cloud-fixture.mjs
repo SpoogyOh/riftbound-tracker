@@ -31,6 +31,7 @@ export function apiFixture(catalog = [{...sample, active:true}], initial = []) {
     const userId = jwt?.includes('.') ? JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url')).sub : alice;
     if (path === '/auth/v1/token') return json(session(body.email === 'bob@example.test' ? bob : alice));
     if (path === '/auth/v1/signup') return json({user:session(alice).user});
+    if (path === '/auth/v1/recover') return json({});
     if (path === '/auth/v1/logout') return new Response(null, {status:204});
     if (path === '/auth/v1/user') return json(session(userId).user);
     if (method === 'GET') {

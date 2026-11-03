@@ -36,11 +36,11 @@ The current project URL and publishable browser key are configured in `src/cloud
 
 Local custom cards, unresolved legacy entries and backup imports remain in local mode. JSON/CSV export works online too, but cloud backup restore and local-to-cloud transfer are deferred until they can be atomic, reviewed and lossless. Do not expect an existing local collection to appear online automatically.
 
-When setting up another host, configure its app URL and email delivery in Supabase as described in [docs/database.md](docs/database.md#authentication-and-first-account-test). The repository does not change hosted Auth settings. The hosted smoke test does not establish fresh registration/email delivery or production readiness. Password recovery UI is a follow-up; it is not included in this first login flow.
+When setting up another host, configure its app URL and email delivery in Supabase as described in [docs/database.md](docs/database.md#authentication-and-first-account-test). The repository does not change hosted Auth settings. The hosted smoke test does not establish fresh registration/email delivery or production readiness. **Passwort vergessen?** emails a reset link to the entered address; the link returns to the same app URL, which must be an allowed redirect URL in Supabase. After opening it, set a new password in the form that appears.
 
 ## Features
 
-- Email/password sign-in, registration with email confirmation, and a private online collection.
+- Email/password sign-in, registration with email confirmation, password reset by email, and a private online collection.
 - Separate normal and foil quantities, with buttons and direct number entry.
 - Table and binder views, card-image lightbox, foil effects, and collection statistics.
 - Quick entry by card name or collector number. Ambiguous matches require an explicit variant selection.

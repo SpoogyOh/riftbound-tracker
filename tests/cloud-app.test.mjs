@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { IDBFactory } from 'fake-indexeddb';
-import { apiFixture, sample, alice, bob, collectionRow } from './cloud-fixture.mjs';
+import { apiFixture, sample, alice, bob, collectionRow, session } from './cloud-fixture.mjs';
 const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
 const sources=await Promise.all(['cards.js','collection.js','storage.js','cloud.js','app.js'].map(file=>readFile(new URL(`../${file}`,import.meta.url),'utf8')));
 async function waitFor(predicate) {
   for(let i=0;i<300;i++) { if(predicate())return; await new Promise(resolve=>setTimeout(resolve,10)); }
   throw new Error('Cloud UI did not settle');
 }
-async function app(t,state) {
-  const dom=new JSDOM(html,{url:'http://localhost/',runScripts:'outside-only'});
+async function app(t,state,url='http://localhost/') {
+  const dom=new JSDOM(html,{url,runScripts:'outside-only'});
   t.after(()=>dom.window.close());
   const w=dom.window,d=w.document;
   await new Promise(resolve=>d.addEventListener('DOMContentLoaded',resolve,{once:true}));
@@ -20,7 +20,7 @@ async function app(t,state) {
   w.localStorage.setItem('riftbound_card_tracker_v2',JSON.stringify([{id:sample.id,source:'OpenRift',normal:5,foil:0}]));
   for(const source of sources) w.eval(source);
   d.dispatchEvent(new w.Event('DOMContentLoaded'));
-  await waitFor(()=>d.getElementById('authStatus').textContent.startsWith('Lokale Sammlung'));
+  await waitFor(()=>d.getElementById('authStatus').textContent.startsWith('Lokale Sammlung') || d.getElementById('authForm').hidden);
   const text=id=>d.getElementById(id).textContent;
   async function signIn(email='alice@example.test') {
     d.getElementById('authEmail').value=email;
@@ -165,4 +165,33 @@ test('registration waits for email confirmation and clears the password without 
   assert.equal(d.getElementById('authForm').hidden,false);
   assert.equal(text('statTotalCopies'),'5');
   assert.equal(state.calls.filter(c=>c.path.startsWith('/rest/')).length,0);
+});
+
+test('password reset requests a neutral recovery email without signing in or reading collections', async t=>{
+  const state=apiFixture(), {d,text}=await app(t,state);
+  d.getElementById('authEmail').value='alice@example.test';
+  d.getElementById('btnResetPassword').click();
+  await waitFor(()=>text('authStatus').includes('Falls ein Konto existiert'));
+  const recover=state.calls.filter(c=>c.path==='/auth/v1/recover');
+  assert.equal(recover.length,1);
+  assert.equal(recover[0].body.email,'alice@example.test');
+  assert.equal(recover[0].query.get('redirect_to'),'http://localhost/');
+  assert.equal(d.getElementById('authForm').hidden,false);
+  assert.equal(text('statTotalCopies'),'5');
+  assert.equal(state.calls.filter(c=>c.path.startsWith('/rest/')).length,0);
+});
+
+test('a recovery link shows the new-password form and saves the new password', async t=>{
+  const {access_token,refresh_token}=session(alice);
+  const state=apiFixture();
+  const {d,text}=await app(t,state,`http://localhost/#access_token=${access_token}&refresh_token=${refresh_token}&expires_in=3600&token_type=bearer&type=recovery`);
+  await waitFor(()=>!d.getElementById('authRecoveryForm').hidden);
+  d.getElementById('authNewPassword').value='new-example-password';
+  d.getElementById('authRecoveryForm').dispatchEvent(new d.defaultView.Event('submit',{cancelable:true}));
+  await waitFor(()=>text('authStatus')==='Passwort geändert.');
+  const update=state.calls.filter(c=>c.path==='/auth/v1/user'&&c.method==='PUT');
+  assert.equal(update.length,1);
+  assert.equal(update[0].body.password,'new-example-password');
+  assert.equal(d.getElementById('authNewPassword').value,'');
+  assert.equal(d.getElementById('authRecoveryForm').hidden,true);
 });

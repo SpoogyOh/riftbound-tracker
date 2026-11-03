@@ -129,7 +129,7 @@ Before registering:
 4. Sign in on a second device. Increment the same variant on both; reload and verify both changes remain. Test a stale absolute edit: the app should report a conflict and reload, rather than overwrite.
 5. Use a second real account to verify it starts with its own collection and cannot read or modify the first account's rows through the Data API. Export a backup, reload, sign out and confirm the local browser collection is still intact.
 
-The connector does not expose hosted Auth configuration updates, so these dashboard settings are documented. Password recovery UI, cloud backup restore and local-to-cloud transfer are follow-ups. Existing backups/custom or unresolved cards must remain intact until a transactional importer can report unsupported entries before writing.
+The connector does not expose hosted Auth configuration updates, so these dashboard settings are documented. Password recovery uses `resetPasswordForEmail` with the current app URL as redirect (it must be an allowed redirect URL) and `updateUser` after the `PASSWORD_RECOVERY` event. Cloud backup restore and local-to-cloud transfer are follow-ups. Existing backups/custom or unresolved cards must remain intact until a transactional importer can report unsupported entries before writing.
 
 The online UI waits for write confirmation. Button adjustments use the existing atomic RPC with SDK retries explicitly disabled. Absolute edits, paired quick entry and image changes use revision-conditional updates or conflict-detecting first inserts. Old edit dialogs are invalidated after a refresh. After a failed/uncertain write, the controller reads the server state; if that read also fails, editing stays locked. Refresh on tab return or use the reload button; there is no live subscription or offline write queue.
 
@@ -151,7 +151,7 @@ The deployed source commit was not verified. Merging code to `main` does not by 
 
 1. Complete the remaining hosted registration/email, conflict, direct API isolation, and logout checks above. Verify the deployed source version and configure production hosting separately.
 2. Add lossless local/backup transfer: validate all entries, stop on custom or unresolved cards, commit all supported changes transactionally and idempotently, then compare totals. Never silently skip quantities or replace a live collection with an old browser snapshot.
-3. Add password recovery and establish database backup/restore procedures before inviting other users.
+3. Establish database backup/restore procedures before inviting other users.
 
 Browser configuration may contain the Supabase project URL and publishable key. Trusted import credentials and service-role/secret keys belong only in server or CI secrets, never in browser code or commits.
 

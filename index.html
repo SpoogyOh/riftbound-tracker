@@ -120,6 +120,13 @@
         </label>
         <button id="btnSignIn" type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm">Anmelden</button>
         <button id="btnSignUp" type="button" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm">Konto erstellen</button>
+        <button id="btnResetPassword" type="button" class="px-1 py-2 text-xs text-slate-400 underline">Passwort vergessen?</button>
+      </form>
+      <form id="authRecoveryForm" hidden class="flex flex-wrap items-end gap-3">
+        <label class="text-xs text-slate-300">Neues Passwort
+          <input id="authNewPassword" type="password" required minlength="8" autocomplete="new-password" class="block mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm" />
+        </label>
+        <button id="btnSetPassword" type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm">Neues Passwort speichern</button>
       </form>
       <div id="authSignedIn" hidden class="flex flex-wrap items-center gap-3 text-sm">
         <span id="authAccount"></span>
