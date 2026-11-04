@@ -35,7 +35,9 @@ test('two browser sessions share confirmed counts; conflicts and logout preserve
     const first=await device(), second=await device();
     await first.locator('#gridContainer button').filter({hasText:'＋'}).first().click();
     await expect(first.locator('#statTotalCopies')).toHaveText('1');
-    await second.locator('#gridContainer button').filter({hasText:'＋'}).first().click();
+    // The second device counts through the card panel.
+    await second.locator('#gridContainer img').first().click();
+    await second.locator('#panelNormalPlus').click();
     await expect(second.locator('#statTotalCopies')).toHaveText('2');
     // The first device still has revision 1, so its absolute edit must be rejected.
     await first.locator('#gridContainer input').first().fill('7');

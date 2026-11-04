@@ -98,7 +98,7 @@ test('variant selection, finish limits, filter reset and CSV',async({page})=>{
   expect(csv).toContain('openrift-');
 });
 
-test('desktop and mobile grid, lightbox and custom image reset',async({page},testInfo)=>{
+test('desktop and mobile grid, card panel and custom image reset',async({page},testInfo)=>{
   await ready(page);
   await page.locator('#viewBtnTable').click();
   await page.locator('#searchInput').fill('Blazing Scorcher');
@@ -109,19 +109,19 @@ test('desktop and mobile grid, lightbox and custom image reset',async({page},tes
   await page.locator('#viewBtnGrid').click();
   await expect(page.locator('#gridContainer')).toBeVisible();
   await page.locator('#gridContainer img').first().click();
-  await expect(page.locator('#lightboxModal')).toBeVisible();
-  await expect(page.locator('#lightboxRules')).not.toBeEmpty();
-  await expect(page.locator('#lightboxSource')).toHaveAttribute('href',/openrift.app\/cards\//);
-  await expect(page.locator('#lightboxImg')).toHaveAttribute('src',/openrift.app\/media\/cards\//);
-  await page.locator('#btnCloseLightbox').click();
+  await expect(page.locator('#cardPanel')).toBeVisible();
+  await expect(page.locator('#panelRules')).not.toBeEmpty();
+  await expect(page.locator('#panelSource')).toHaveAttribute('href',/openrift.app\/cards\//);
+  await expect(page.locator('#panelImg')).toHaveAttribute('src',/openrift.app\/media\/cards\//);
+  await page.locator('#btnClosePanel').click();
   await page.screenshot({path:testInfo.outputPath('desktop-grid.png')});
   await page.setViewportSize({width:390,height:844});
   await expect(page.locator('#gridContainer')).toBeVisible();
   await page.locator('#gridContainer img').first().click();
-  await expect(page.locator('#lbNormalPlus')).toBeVisible();
-  await page.locator('#lbNormalPlus').click();
+  await expect(page.locator('#panelNormalPlus')).toBeVisible();
+  await page.locator('#panelNormalPlus').click();
   await expect(page.locator('#storageStatus')).toContainText('Saved');
-  await page.screenshot({path:testInfo.outputPath('mobile-lightbox.png')});
+  await page.screenshot({path:testInfo.outputPath('mobile-panel.png')});
 });
 
 test('one real OpenRift image responds with image data',async({page,request})=>{
@@ -162,4 +162,35 @@ test('binder is the default view; filters sit in a sidebar on desktop and a shee
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-domain="Fury"]')).toBeHidden();
   await expect(tiles.first()).toContainText('Fury');
+});
+
+test('card panel stays beside the binder: arrows browse, counts save, Esc closes',async({page})=>{
+  await ready(page);
+  await page.locator('#searchInput').fill('Blazing Scorcher');
+  const tiles=page.locator('#gridContainer > div');
+  await expect(tiles).toHaveCount(2);
+  await tiles.nth(0).locator('img').click();
+  await expect(page.locator('#cardPanel')).toBeVisible();
+  await expect(page.locator('#panelName')).toHaveText('Blazing Scorcher');
+  await expect(tiles.nth(0)).toHaveClass(/is-active/);
+  await expect(page.locator('#btnPanelPrev')).toBeDisabled();
+  // Non-modal: the binder stays usable, and the panel has room beside it.
+  const panelBox=await page.locator('#cardPanel').boundingBox();
+  const gridBox=await page.locator('#gridContainer').boundingBox();
+  expect(gridBox.x+gridBox.width).toBeLessThanOrEqual(panelBox.x);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#panelName')).toHaveText('Blazing Scorcher [Promo]');
+  await expect(page.locator('#btnPanelNext')).toBeDisabled();
+  await expect(page.locator('#panelNormalPlus')).toBeDisabled();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#panelName')).toHaveText('Blazing Scorcher');
+  await page.locator('#panelNormalPlus').click();
+  await expect(page.locator('#storageStatus')).toContainText('Saved');
+  await expect(page.locator('#panelNormalVal')).toHaveText('1');
+  await expect(tiles.nth(0).locator('input').first()).toHaveValue('1');
+  await tiles.nth(1).locator('img').click();
+  await expect(page.locator('#panelName')).toHaveText('Blazing Scorcher [Promo]');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#cardPanel')).toBeHidden();
+  await expect(page.locator('#gridContainer .is-active')).toHaveCount(0);
 });

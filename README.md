@@ -42,7 +42,7 @@ When setting up another host, configure its app URL and email delivery in Supaba
 
 - Email/password sign-in, registration with email confirmation, and a private online collection.
 - Separate normal and foil quantities, with buttons and direct number entry.
-- Table and binder views, card-image lightbox, foil effects, and collection statistics.
+- Binder and list views, a card panel that stays open beside the results (arrow keys browse, Esc closes), foil effects, and collection statistics.
 - Quick entry by card name or collector number. Ambiguous matches require an explicit variant selection.
 - Filters for ownership, domains, set, card type, and rarity, plus several sorting options.
 - English card catalog imported from [OpenRift](https://openrift.app/developers).

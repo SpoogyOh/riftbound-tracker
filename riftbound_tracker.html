@@ -58,6 +58,7 @@
     .box { height: 2rem; padding: 0 .5rem; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); font-size: .75rem; }
     .step { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); font-size: .75rem; font-weight: 700; cursor: pointer; }
     .step:hover:not(:disabled) { border-color: var(--ink); }
+    .step-lg { width: 2.75rem; height: 2.75rem; font-size: 1rem; }
     .count { width: 2.75rem; height: 1.75rem; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); text-align: center; font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
     .count-sm { width: 2.25rem; }
     /* Gold is reserved for foil copies; defined after .count and .field so it wins. */
@@ -81,6 +82,11 @@
       #filterPanel:popover-open .option:not([aria-pressed="true"]) { background: transparent; }
     }
     #filterPanel::backdrop { background: rgba(0, 0, 0, .4); }
+    /* Card panel: the open card is marked in the results; on desktop the page makes room for the panel. */
+    [data-card-id] { scroll-margin-top: 5rem; scroll-margin-bottom: 1rem; }
+    div.is-active { box-shadow: inset 0 0 0 2px var(--ink); }
+    tr.is-active { background: var(--soft); }
+    @media (min-width: 1024px) { body.panel-open { padding-right: 26rem; } }
 
     @keyframes foilShimmer {
       0% { background-position: 0% 50%; }
@@ -348,7 +354,7 @@
         </div>
 
         <!-- GRID VIEW (Binder Look) -->
-        <section id="gridContainer" aria-label="Binder" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 border-t border-l border-line"></section>
+        <section id="gridContainer" aria-label="Binder" class="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] border-t border-l border-line"></section>
 
         <!-- TABLE VIEW -->
         <section id="tableContainer" aria-label="List" class="hidden border-t border-ink">
@@ -389,56 +395,72 @@
 
   </div>
 
-  <!-- LIGHTBOX MODAL -->
-  <div id="lightboxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 scrim">
-    <div class="bg-paper max-w-sm w-full p-5 space-y-4 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <span id="lightboxNumber" class="text-xs text-muted">OGN-001</span>
-          <h3 id="lightboxName" class="caps text-xl leading-tight">Kartenname</h3>
-        </div>
-        <button id="btnCloseLightbox" type="button" aria-label="Schließen" class="caps text-sm cursor-pointer">[×]</button>
+  <!-- CARD PANEL: a non-modal side panel on desktop, a bottom sheet on smaller screens -->
+  <aside id="cardPanel" hidden role="dialog" aria-modal="false" aria-labelledby="panelName" tabindex="-1"
+    class="fixed z-40 inset-x-0 bottom-0 max-h-[85vh] border-t lg:inset-x-auto lg:top-0 lg:right-0 lg:max-h-none lg:w-96 lg:border-t-0 lg:border-l border-line bg-paper flex flex-col focus:outline-none">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-line">
+      <span id="panelNumber" class="text-xs text-muted tabular-nums">OGN-001</span>
+      <button id="btnClosePanel" type="button" aria-label="Close card" class="caps text-sm cursor-pointer">[×]</button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+      <div id="panelImgWrapper" class="relative mx-auto card-aspect h-[32vh] lg:h-[45vh] max-w-full rounded-md overflow-hidden bg-soft">
+        <img id="panelImg" src="" alt="" class="w-full h-full object-cover" />
+        <div id="panelFoilGlare" class="hidden absolute inset-0 foil-image-glare"></div>
       </div>
 
-      <div id="lightboxImgWrapper" class="relative w-full card-aspect rounded-md overflow-hidden bg-soft">
-        <img id="lightboxImg" src="" alt="" class="w-full h-full object-cover" />
-        <div id="lightboxFoilGlare" class="hidden absolute inset-0 foil-image-glare"></div>
+      <div>
+        <h2 id="panelName" class="caps text-xl leading-tight">Card</h2>
+        <p id="panelMeta" class="text-xs text-muted mt-1">Domain · Type · Rarity</p>
       </div>
 
-      <div class="flex items-center justify-between gap-3 text-xs text-muted">
-        <span id="lightboxMeta">Domain • Typ • Seltenheit</span>
-        <span id="lightboxPlaysetText" class="font-bold text-ink whitespace-nowrap">0 / 3</span>
-      </div>
-
-      <p id="lightboxRules" class="text-xs whitespace-pre-line"></p>
-      <a id="lightboxSource" href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="caps text-xs underline">Kartendetails auf OpenRift ↗</a>
-      <div class="grid grid-cols-2 gap-3 pt-4 border-t border-line">
-        <div class="flex flex-col items-center gap-2">
-          <span id="lightboxFinish" class="caps text-xs text-muted">Normal Kopien</span>
-          <div class="flex items-center gap-1.5">
-            <button id="lbNormalMinus" type="button" class="step">−</button>
-            <span id="lbNormalVal" class="w-8 text-center text-sm font-bold tabular-nums">0</span>
-            <button id="lbNormalPlus" type="button" class="step">＋</button>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <span id="panelFinish" class="caps text-sm">Normal</span>
+          <div class="flex items-center gap-2">
+            <button id="panelNormalMinus" type="button" aria-label="Remove one normal copy" class="step step-lg">−</button>
+            <span id="panelNormalVal" class="w-8 text-center text-lg font-bold tabular-nums">0</span>
+            <button id="panelNormalPlus" type="button" aria-label="Add one normal copy" class="step step-lg">＋</button>
           </div>
         </div>
-        <div class="flex flex-col items-center gap-2">
-          <span class="caps text-xs text-foil">Foil Kopien</span>
-          <div class="flex items-center gap-1.5">
-            <button id="lbFoilMinus" type="button" class="step text-foil">−</button>
-            <span id="lbFoilVal" class="w-8 text-center text-sm font-bold text-foil tabular-nums">0</span>
-            <button id="lbFoilPlus" type="button" class="step text-foil">＋</button>
+        <div class="flex items-center justify-between gap-3">
+          <span class="caps text-sm text-foil">Foil</span>
+          <div class="flex items-center gap-2">
+            <button id="panelFoilMinus" type="button" aria-label="Remove one foil copy" class="step step-lg text-foil">−</button>
+            <span id="panelFoilVal" class="w-8 text-center text-lg font-bold text-foil tabular-nums">0</span>
+            <button id="panelFoilPlus" type="button" aria-label="Add one foil copy" class="step step-lg text-foil">＋</button>
           </div>
         </div>
+        <p class="flex items-center justify-between text-xs pt-1">
+          <span class="text-muted">Owned</span>
+          <span id="panelPlaysetText" class="font-bold tabular-nums">0 / 3</span>
+        </p>
+      </div>
+
+      <details class="border-t border-line pt-3">
+        <summary class="caps text-xs cursor-pointer">Rules text</summary>
+        <p id="panelRules" class="text-xs whitespace-pre-line mt-2"></p>
+      </details>
+
+      <div class="flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-3">
+        <a id="panelSource" href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="caps text-xs underline">Card on OpenRift ↗</a>
+        <button id="btnPanelEdit" type="button" class="caps text-xs underline cursor-pointer">Edit card &amp; image</button>
       </div>
     </div>
-  </div>
+
+    <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-line">
+      <button id="btnPanelPrev" type="button" class="btn">← Prev</button>
+      <span class="hidden lg:inline text-xs text-muted">← → browse · Esc close</span>
+      <button id="btnPanelNext" type="button" class="btn">Next →</button>
+    </div>
+  </aside>
 
   <!-- MODAL: Add / Edit Card -->
   <div id="cardModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 scrim">
     <div class="panel max-w-md w-full p-6 space-y-5 max-h-[92vh] overflow-y-auto">
       <div class="flex items-start justify-between gap-3">
-        <h3 id="modalTitle" class="headline text-3xl leading-[0.9]">Neue Riftbound-Karte hinzufügen</h3>
-        <button id="btnCloseModal" type="button" aria-label="Schließen" class="caps text-sm cursor-pointer">[×]</button>
+        <h3 id="modalTitle" class="headline text-3xl leading-[0.9]">New custom card</h3>
+        <button id="btnCloseModal" type="button" aria-label="Close" class="caps text-sm cursor-pointer">[×]</button>
       </div>
 
       <form id="modalCardForm" class="space-y-4">
@@ -446,12 +468,12 @@
 
         <div class="grid grid-cols-3 gap-4">
           <div class="col-span-1">
-            <label class="block text-xs">Karten-Nr.</label>
+            <label class="block text-xs">Card number</label>
             <input id="modalNumber" type="text" placeholder="OGN-001" required class="field" />
           </div>
           <div class="col-span-2">
-            <label class="block text-xs">Kartenname</label>
-            <input id="modalName" type="text" placeholder="z. B. Jinx, Loose Cannon" required class="field" />
+            <label class="block text-xs">Card name</label>
+            <input id="modalName" type="text" placeholder="e.g. Jinx, Loose Cannon" required class="field" />
           </div>
         </div>
 
@@ -481,7 +503,7 @@
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs">Kartentyp</label>
+            <label class="block text-xs">Type</label>
             <select id="modalType" class="field">
               <option value="Unit">Unit</option>
               <option value="Champion">Champion</option>
@@ -494,13 +516,13 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs">Seltenheit</label>
+            <label class="block text-xs">Rarity</label>
             <select id="modalRarity" class="field">
               <option value="Common">Common</option>
               <option value="Uncommon">Uncommon</option>
               <option value="Rare">Rare</option>
               <option value="Epic">Epic</option>
-              <option value="Showcase">Showcase / Alt-Art</option>
+              <option value="Showcase">Showcase / Alt art</option>
             </select>
           </div>
         </div>
@@ -508,40 +530,40 @@
         <!-- Custom Image URL or File Upload -->
         <div class="space-y-2 pt-1">
           <div class="flex items-center justify-between">
-            <label class="caps text-xs">Kartenbild (Optional)</label>
-            <span class="text-xs">Leer lassen = Auto-CDN / SVG</span>
+            <label class="caps text-xs">Card image (optional)</label>
+            <span class="text-xs">Empty = catalog image or placeholder</span>
           </div>
           <input
             id="modalImageUrl"
             type="text"
-            placeholder="https://... (oder unten eigene Bilddatei wählen)"
+            placeholder="https://… (or choose an image file below)"
             class="field"
           />
           <div class="flex items-center justify-between gap-2 pt-1">
             <label class="btn">
-              <span>Bilddatei wählen…</span>
+              <span>Choose image file…</span>
               <input id="modalImageFile" type="file" accept="image/*" class="hidden" />
             </label>
             <button id="btnClearModalImage" type="button" class="text-xs underline cursor-pointer">
-              Auf Standardbild zurücksetzen
+              Reset to default image
             </button>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4 pt-1">
           <div>
-            <label class="block text-xs">Normal Kopien</label>
+            <label class="block text-xs">Normal copies</label>
             <input id="modalNormal" type="number" min="0" max="999" value="1" class="field font-bold" />
           </div>
           <div>
-            <label class="block text-xs">Foil Kopien</label>
+            <label class="block text-xs">Foil copies</label>
             <input id="modalFoil" type="number" min="0" max="999" value="0" class="field font-bold" />
           </div>
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-2">
-          <button id="btnCancelModal" type="button" class="btn">Abbrechen</button>
-          <button type="submit" class="btn btn-primary">Karte speichern →</button>
+          <button id="btnCancelModal" type="button" class="btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save card →</button>
         </div>
       </form>
     </div>
@@ -748,7 +770,7 @@ const state = {
   rarity: 'all',
   sort: 'number',
   viewMode: 'grid',
-  activeLightboxCardId: null
+  activeCardId: null
 };
 
 function generateCardSvgDataUri(card) {
@@ -895,8 +917,8 @@ function updateCardCount(cardId, field, newValue) {
   state.cards[idx][field] = cleanVal;
   saveCollection();
   renderAll();
-  if (state.activeLightboxCardId === cardId) {
-    syncLightboxView(cardId);
+  if (state.activeCardId === cardId) {
+    syncCardPanel(cardId);
   }
 }
 
@@ -1043,6 +1065,7 @@ function renderListAndGrid() {
     emptyEl.classList.remove('hidden');
     tableContainer.classList.add('hidden');
     gridContainer.classList.add('hidden');
+    if (state.activeCardId) syncCardPanel(state.activeCardId);
     return;
   }
 
@@ -1057,6 +1080,8 @@ function renderListAndGrid() {
     gridContainer.classList.remove('hidden');
     renderGridCards(filtered);
   }
+  // Keep the open card marked and its prev/next buttons current after filtering.
+  if (state.activeCardId) syncCardPanel(state.activeCardId);
 }
 
 function renderTableRows(cards) {
@@ -1070,12 +1095,12 @@ function renderTableRows(cards) {
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
-      <tr class="group hover:bg-soft/40 transition">
+      <tr data-card-id="${escapeHtml(card.id)}" class="group hover:bg-soft/40 transition">
         <td class="py-2 pr-3">
           <div class="flex items-center gap-3">
             <button
               type="button"
-              onclick="openLightbox('${escapeHtml(card.id)}')"
+              onclick="openCardPanel('${escapeHtml(card.id)}')"
               class="relative w-10 h-14 rounded overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
               title="Enlarge card image"
             >
@@ -1169,7 +1194,7 @@ function renderGridCards(cards) {
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
-      <div class="group border-r border-b border-line p-4 flex flex-col gap-3">
+      <div data-card-id="${escapeHtml(card.id)}" class="group border-r border-b border-line p-3 sm:p-4 flex flex-col gap-3">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <h3 class="caps text-[15px] leading-tight truncate" title="${escapeHtml(cardLabel(card))}">
@@ -1193,7 +1218,7 @@ function renderGridCards(cards) {
             src="${escapeHtml(imgUrl)}"
             alt="${escapeHtml(cardLabel(card))}"
             loading="lazy"
-            onclick="openLightbox('${escapeHtml(card.id)}')"
+            onclick="openCardPanel('${escapeHtml(card.id)}')"
             onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
             class="w-full h-full object-cover cursor-pointer group-hover:scale-103 transition-transform duration-300 ${total === 0 ? 'card-unowned-img' : ''}"
           />
@@ -1201,7 +1226,7 @@ function renderGridCards(cards) {
         </div>
 
         <div class="mt-auto space-y-1.5">
-          <div class="flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
+          <div class="hidden sm:flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
             <span class="caps text-xs truncate">${card.specialFinish ? escapeHtml(card.finishes.join(' / ')) : 'Normal'}</span>
             <div class="flex items-center gap-1">
               <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
@@ -1217,7 +1242,7 @@ function renderGridCards(cards) {
             </div>
           </div>
 
-          <div class="flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
+          <div class="hidden sm:flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
             <span class="caps text-xs text-foil">Foil</span>
             <div class="flex items-center gap-1">
               <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
@@ -1234,7 +1259,7 @@ function renderGridCards(cards) {
           </div>
 
           <div class="flex items-center justify-between pt-1 text-xs">
-            <span class="text-muted">Owned <strong class="text-ink tabular-nums">${total} / ${target}</strong></span>
+            <span class="text-muted">Owned <strong class="text-ink tabular-nums">${total} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
             <div class="flex items-center gap-1">
               ${renderPlaysetDots(total, target)}
             </div>
@@ -1254,16 +1279,31 @@ function renderAll() {
   document.querySelector('#quickAddForm button[type="submit"]').disabled = !!cloud?.locked;
   document.querySelector('#modalCardForm button[type="submit"]').disabled = !!cloud?.locked;
   document.getElementById('btnCloudRefresh').disabled = !!cloud?.busy;
-  if (state.activeLightboxCardId) syncLightboxView(state.activeLightboxCardId);
 }
 
-function openLightbox(cardId) {
-  state.activeLightboxCardId = cardId;
-  syncLightboxView(cardId);
-  document.getElementById('lightboxModal').classList.remove('hidden');
+function openCardPanel(cardId) {
+  state.activeCardId = cardId;
+  syncCardPanel(cardId);
+  document.getElementById('cardPanel').hidden = false;
+  document.body.classList.add('panel-open');
 }
 
-function syncLightboxView(cardId) {
+function visibleResultFor(cardId) {
+  const container = document.getElementById(state.viewMode === 'grid' ? 'gridContainer' : 'cardTableBody');
+  return [...container.children].find(el => el.dataset.cardId === cardId);
+}
+
+// Browse in the order the results are shown; does nothing at either end.
+function stepCardPanel(delta) {
+  const cards = getFilteredCards();
+  const index = cards.findIndex(c => c.id === state.activeCardId);
+  const next = index === -1 ? null : cards[index + delta];
+  if (!next) return;
+  openCardPanel(next.id);
+  visibleResultFor(next.id)?.scrollIntoView({ block: 'nearest' });
+}
+
+function syncCardPanel(cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card) return;
   const normal = card.normal || 0;
@@ -1271,38 +1311,48 @@ function syncLightboxView(cardId) {
   const total = normal + foil;
   const target = getPlaysetTarget(card);
 
-  document.getElementById('lightboxNumber').textContent = card.number;
-  document.getElementById('lightboxName').textContent = cardLabel(card);
-  document.getElementById('lightboxMeta').textContent = `${cardDomains(card).join(' / ')} • ${card.type} • ${card.rarity}`;
-  document.getElementById('lightboxRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
-  const sourceLink=document.getElementById('lightboxSource');
+  document.getElementById('panelNumber').textContent = card.number;
+  document.getElementById('panelName').textContent = cardLabel(card);
+  document.getElementById('panelMeta').textContent = `${cardDomains(card).join(' / ')} · ${card.type} · ${card.rarity}`;
+  document.getElementById('panelRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
+  const sourceLink=document.getElementById('panelSource');
   sourceLink.href=card.sourceUrl || 'https://openrift.app';
   sourceLink.classList.toggle('hidden', !card.sourceUrl);
-  document.getElementById('lightboxFinish').textContent=card.specialFinish ? `Exemplare: ${card.finishes.join(', ')}` : 'Normal Kopien';
-  for(const [id,field] of [['lbNormalMinus','normal'],['lbNormalPlus','normal'],['lbFoilMinus','foil'],['lbFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
-  document.getElementById('lightboxPlaysetText').textContent = `Gesamt: ${total} / ${target}`;
+  document.getElementById('panelFinish').textContent=card.specialFinish ? card.finishes.join(' / ') : 'Normal';
+  for(const [id,field] of [['panelNormalMinus','normal'],['panelNormalPlus','normal'],['panelFoilMinus','foil'],['panelFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
+  document.getElementById('panelPlaysetText').textContent = `${total} / ${target}`;
 
-  const imgEl = document.getElementById('lightboxImg');
+  const imgEl = document.getElementById('panelImg');
   delete imgEl.dataset.fallbackApplied;
   imgEl.onerror = () => handleCardImageError(imgEl, card.id);
+  imgEl.alt = cardLabel(card);
   imgEl.src = getCardPrimaryImageUrl(card);
 
-  document.getElementById('lightboxFoilGlare').classList.toggle('hidden', foil === 0);
-  document.getElementById('lightboxImgWrapper').classList.toggle('foil-active-border', foil > 0);
+  document.getElementById('panelFoilGlare').classList.toggle('hidden', foil === 0);
+  document.getElementById('panelImgWrapper').classList.toggle('foil-active-border', foil > 0);
 
-  document.getElementById('lbNormalVal').textContent = normal;
-  document.getElementById('lbFoilVal').textContent = foil;
+  document.getElementById('panelNormalVal').textContent = normal;
+  document.getElementById('panelFoilVal').textContent = foil;
+
+  const cards = getFilteredCards();
+  const index = cards.findIndex(c => c.id === cardId);
+  document.getElementById('btnPanelPrev').disabled = index <= 0;
+  document.getElementById('btnPanelNext').disabled = index === -1 || index === cards.length - 1;
+  document.querySelectorAll('[data-card-id].is-active').forEach(el => el.classList.remove('is-active'));
+  visibleResultFor(cardId)?.classList.add('is-active');
 }
 
-function closeLightbox() {
-  state.activeLightboxCardId = null;
-  document.getElementById('lightboxModal').classList.add('hidden');
+function closeCardPanel() {
+  state.activeCardId = null;
+  document.getElementById('cardPanel').hidden = true;
+  document.body.classList.remove('panel-open');
+  document.querySelectorAll('[data-card-id].is-active').forEach(el => el.classList.remove('is-active'));
 }
 
 function openAddModal(prefillName = '') {
   if (onlineMode()) return;
   for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity','modalNormal','modalFoil']) document.getElementById(id).disabled=false;
-  document.getElementById('modalTitle').textContent = 'Neue Riftbound-Karte hinzufügen';
+  document.getElementById('modalTitle').textContent = 'New custom card';
   document.getElementById('modalCardId').value = '';
   const nextNum = `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
   document.getElementById('modalNumber').value = nextNum;
@@ -1325,7 +1375,7 @@ function openEditModal(cardId) {
   document.getElementById('modalNormal').disabled=!canCount(card,'normal');
   document.getElementById('modalFoil').disabled=!canCount(card,'foil');
   modalCloudToken = cloud?.editToken(cardId);
-  document.getElementById('modalTitle').textContent = 'Karte & Bild bearbeiten';
+  document.getElementById('modalTitle').textContent = 'Edit card & image';
   document.getElementById('modalCardId').value = card.id;
   document.getElementById('modalNumber').value = card.number;
   document.getElementById('modalName').value = card.name;
@@ -1346,14 +1396,14 @@ function closeModal() {
 window.adjustCardCount = adjustCardCount;
 window.updateCardCount = updateCardCount;
 window.openEditModal = openEditModal;
-window.openLightbox = openLightbox;
+window.openCardPanel = openCardPanel;
 window.handleCardImageError = handleCardImageError;
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (window.RiftboundCloud) {
     cloud = window.RiftboundCloud.start({
       status: setStorageStatus,
-      clear() { liveCatalog = null; state.cards = []; closeModal(); closeLightbox(); renderAll(); },
+      clear() { liveCatalog = null; state.cards = []; closeModal(); closeCardPanel(); renderAll(); },
       show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
       async local(isCurrent) { await loadCollection(isCurrent); if (isCurrent()) refreshCatalogControls(); },
       render: renderAll
@@ -1362,21 +1412,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!cloud) { await loadCollection(); refreshCatalogControls(); }
   renderAll();
 
-  document.getElementById('btnCloseLightbox').addEventListener('click', closeLightbox);
-  document.getElementById('lightboxModal').addEventListener('click', e => {
-    if (e.target.id === 'lightboxModal') closeLightbox();
+  document.getElementById('btnClosePanel').addEventListener('click', closeCardPanel);
+  document.getElementById('btnPanelPrev').addEventListener('click', () => stepCardPanel(-1));
+  document.getElementById('btnPanelNext').addEventListener('click', () => stepCardPanel(1));
+  document.getElementById('btnPanelEdit').addEventListener('click', () => {
+    if (state.activeCardId) openEditModal(state.activeCardId);
   });
-  document.getElementById('lbNormalMinus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'normal', -1);
-  });
-  document.getElementById('lbNormalPlus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'normal', 1);
-  });
-  document.getElementById('lbFoilMinus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'foil', -1);
-  });
-  document.getElementById('lbFoilPlus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'foil', 1);
+  for (const [id, field, delta] of [['panelNormalMinus', 'normal', -1], ['panelNormalPlus', 'normal', 1], ['panelFoilMinus', 'foil', -1], ['panelFoilPlus', 'foil', 1]]) {
+    document.getElementById(id).addEventListener('click', () => {
+      if (state.activeCardId) adjustCardCount(state.activeCardId, field, delta);
+    });
+  }
+  document.addEventListener('keydown', e => {
+    if (!state.activeCardId || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    // Menus and the edit dialog handle their own keys while open.
+    if (document.querySelector(':popover-open') || !document.getElementById('cardModal').classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeCardPanel();
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      stepCardPanel(e.key === 'ArrowRight' ? 1 : -1);
+    }
   });
 
   document.getElementById('modalImageFile').addEventListener('change', e => {

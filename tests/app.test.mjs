@@ -50,9 +50,9 @@ test('real catalog initializes; legacy counts, secondary domains, variants and I
   assert.ok(rows.every(c=>c.set==='SFD'&&c.domains.includes('Order')));
   d.getElementById('viewBtnGrid').click();
   assert.equal(d.getElementById('gridContainer').children.length,rows.length);
-  w.openLightbox(target.id);
-  assert.ok(d.getElementById('lightboxRules').textContent.length);
-  assert.match(d.getElementById('lightboxSource').href,/openrift.app\/cards\//);
+  w.openCardPanel(target.id);
+  assert.ok(d.getElementById('panelRules').textContent.length);
+  assert.match(d.getElementById('panelSource').href,/openrift.app\/cards\//);
   dom.window.close();
 });
 test('storage falls back visibly and rejects a write when both stores fail',async()=>{
