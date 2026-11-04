@@ -6,21 +6,21 @@
     normal: count(c.normal), foil: count(c.foil) });
 
   function validateItems(items) {
-    if (!Array.isArray(items)) throw new Error('Backup enthält keine Kartenliste.');
+    if (!Array.isArray(items)) throw new Error('Backup contains no card list.');
     const ids = new Set();
     for (const c of items) {
-      if (!c || typeof c.id !== 'string' || ids.has(c.id) || /["'<>]/.test(c.id)) throw new Error('Ungültige oder doppelte Karten-ID.');
+      if (!c || typeof c.id !== 'string' || ids.has(c.id) || /["'<>]/.test(c.id)) throw new Error('Invalid or duplicate card ID.');
       ids.add(c.id);
       for (const field of ['normal','foil']) {
-        if (c[field] !== undefined && (!Number.isInteger(c[field]) || c[field] < 0 || c[field] > 999)) throw new Error('Ungültiger Kartenbestand.');
+        if (c[field] !== undefined && (!Number.isInteger(c[field]) || c[field] < 0 || c[field] > 999)) throw new Error('Invalid card quantity.');
       }
-      if (!c.id.startsWith('openrift-') && (typeof c.name !== 'string' || typeof c.number !== 'string')) throw new Error('Kartenname oder Nummer fehlt.');
+      if (!c.id.startsWith('openrift-') && (typeof c.name !== 'string' || typeof c.number !== 'string')) throw new Error('Card name or number is missing.');
     }
     return items;
   }
 
   function merge(catalog, record) {
-    if (!Array.isArray(record) && (!record || record.schemaVersion !== 3 || !Array.isArray(record.items))) throw new Error('Ungültiges Sammlungsformat.');
+    if (!Array.isArray(record) && (!record || record.schemaVersion !== 3 || !Array.isArray(record.items))) throw new Error('Invalid collection format.');
     const items = validateItems(Array.isArray(record) ? record : record.items);
     const cards = catalog.map(c => ({...c, normal:0, foil:0}));
     const byId = new Map(cards.map(c=>[c.id,c]));

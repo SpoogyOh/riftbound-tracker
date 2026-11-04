@@ -29,12 +29,12 @@ test('legacy migration, native IndexedDB, JSON round trip and standalone', async
   });
   await page.goto('/');
   await expect(page.locator('#statTotalCopies')).toHaveText('6');
-  await expect(page.locator('#storageStatus')).toContainText('zur Prüfung');
+  await expect(page.locator('#storageStatus')).toContainText('for review');
   await page.locator('#searchInput').fill('Blazing Scorcher');
   const row=page.locator('#cardTableBody tr').filter({has:page.locator('input[value="2"]')});
   await expect(row).toHaveCount(1);
   await row.getByRole('button',{name:'＋',exact:true}).first().click();
-  await expect(page.locator('#storageStatus')).toContainText('Gespeichert · IndexedDB');
+  await expect(page.locator('#storageStatus')).toContainText('Saved · IndexedDB');
   await page.reload();
   await expect(page.locator('#statTotalCopies')).toHaveText('7');
   const record=await page.evaluate(()=>new Promise((resolve,reject)=>{
@@ -50,6 +50,7 @@ test('legacy migration, native IndexedDB, JSON round trip and standalone', async
   expect(record.items).toHaveLength(2);
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('riftbound_card_tracker_v2'))[0].normal)).toBe(2);
   const downloaded=page.waitForEvent('download');
+  await page.locator('#btnAccountMenu').click();
   await page.locator('#btnExportJSON').click();
   const backup=await downloaded;
   const path=await backup.path();
@@ -58,7 +59,7 @@ test('legacy migration, native IndexedDB, JSON round trip and standalone', async
   expect(json.items.reduce((n,c)=>n+c.normal+c.foil,0)).toBe(7);
   page.on('dialog',dialog=>dialog.accept());
   await page.locator('#inputImportJSON').setInputFiles(path);
-  await expect(page.locator('#storageStatus')).toContainText('Gespeichert · IndexedDB');
+  await expect(page.locator('#storageStatus')).toContainText('Saved · IndexedDB');
   await expect(page.locator('#statTotalCopies')).toHaveText('7');
   await page.goto('/riftbound_tracker.html');
   await expect(page.locator('#statTotalCopies')).toHaveText('7');
@@ -89,6 +90,7 @@ test('variant selection, finish limits, filter reset and CSV',async({page})=>{
   const promo=page.locator('#cardTableBody tr').filter({hasText:'[Promo]'});
   await expect(promo.locator('input').first()).toBeDisabled();
   const downloaded=page.waitForEvent('download');
+  await page.locator('#btnAccountMenu').click();
   await page.locator('#btnExportCSV').click();
   const csv=await readFile(await (await downloaded).path(),'utf8');
   expect(csv).toContain('Varianten_ID');
@@ -116,7 +118,7 @@ test('desktop and mobile grid, lightbox and custom image reset',async({page},tes
   await page.locator('#gridContainer img').first().click();
   await expect(page.locator('#lbNormalPlus')).toBeVisible();
   await page.locator('#lbNormalPlus').click();
-  await expect(page.locator('#storageStatus')).toContainText('Gespeichert');
+  await expect(page.locator('#storageStatus')).toContainText('Saved');
   await page.screenshot({path:testInfo.outputPath('mobile-lightbox.png')});
 });
 
@@ -127,4 +129,16 @@ test('one real OpenRift image responds with image data',async({page,request})=>{
   expect(response.ok()).toBe(true);
   expect(response.headers()['content-type']).toMatch(/^image\//);
   expect((await response.body()).length).toBeGreaterThan(100);
+});
+
+test('header: slash focuses search; account menu opens and closes',async({page})=>{
+  await ready(page);
+  await page.keyboard.press('/');
+  await expect(page.locator('#searchInput')).toBeFocused();
+  await expect(page.locator('#searchInput')).toHaveValue('');
+  await expect(page.locator('#authEmail')).toBeHidden();
+  await page.locator('#btnAccountMenu').click();
+  await expect(page.locator('#authEmail')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#authEmail')).toBeHidden();
 });

@@ -4,11 +4,11 @@
   let queue=Promise.resolve();
   function open() {
     if (!database) database=new Promise((resolve,reject)=>{
-      if (!root.indexedDB) return reject(new Error('IndexedDB nicht verfügbar.'));
+      if (!root.indexedDB) return reject(new Error('IndexedDB is not available.'));
       const request=root.indexedDB.open('riftbound-tracker',1);
       request.onupgradeneeded=()=>request.result.createObjectStore('collection');
       request.onerror=()=>reject(request.error);
-      request.onblocked=()=>reject(new Error('Bitte andere Tracker-Tabs schließen.'));
+      request.onblocked=()=>reject(new Error('Close other tracker tabs.'));
       request.onsuccess=()=>resolve(request.result);
     });
     return database;
@@ -62,7 +62,7 @@
         return 'IndexedDB';
       } catch(error) {
         localStorage.setItem(KEY,JSON.stringify(record));
-        return 'Browser-Speicher (Fallback)';
+        return 'browser storage (fallback)';
       }
     });
     queue=pending;

@@ -127,23 +127,23 @@ async function loadCollection(isCurrent = () => true) {
     state.cards = window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], saved);
     persistenceEnabled = true;
     const review = state.cards.filter(c => c.migrationReview).length;
-    setStorageStatus(review ? `${review} bisherige Einträge zur Prüfung erhalten.` : 'Sammlung geladen.');
+    setStorageStatus(review ? `${review} earlier entries kept for review.` : 'Collection loaded.');
   } catch (error) {
     if (!isCurrent()) return;
     persistenceEnabled = false;
     state.cards = (window.DEFAULT_RIFTBOUND_CARDS || []).map(c => ({...c}));
-    setStorageStatus('Gespeicherte Sammlung konnte nicht gelesen werden. Bitte Backup sichern und Seite neu laden; Speichern ist gesperrt.', true);
+    setStorageStatus('Couldn’t read the saved collection. Download a backup and reload the page; saving is locked.', true);
   }
 }
 function saveCollection() {
   if (!persistenceEnabled || onlineMode()) return Promise.resolve(false);
   const record = window.CollectionModel.snapshot(state.cards, currentCatalog());
-  setStorageStatus('Wird gespeichert …');
+  setStorageStatus('Saving…');
   return window.CollectionStorage.save(record).then(mode => {
-    if (!onlineMode()) setStorageStatus(`Gespeichert · ${mode}`);
+    if (!onlineMode()) setStorageStatus(`Saved · ${mode}`);
     return true;
   }).catch(() => {
-    if (!onlineMode()) setStorageStatus('Speichern fehlgeschlagen. Bitte jetzt ein JSON-Backup herunterladen.', true);
+    if (!onlineMode()) setStorageStatus('Saving failed. Download a JSON backup now.', true);
     return false;
   });
 }
@@ -169,8 +169,8 @@ function refreshCatalogControls() {
     if ([...el.options].some(o=>o.value===selected)) el.value=selected;
   }
   const meta=window.OPENRIFT_CATALOG_META;
-  if (liveCatalog) document.getElementById('catalogStatus').textContent=`${liveCatalog.length} Varianten · Supabase`;
-  else if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount} Varianten · ${meta.printingCount} Druckeinträge · Stand ${meta.importedAt.slice(0,10)}`;
+  if (liveCatalog) document.getElementById('catalogStatus').textContent=`${liveCatalog.length.toLocaleString('en-US')} variants · Supabase`;
+  else if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount.toLocaleString('en-US')} variants · ${meta.printingCount.toLocaleString('en-US')} printings · updated ${meta.importedAt.slice(0,10)}`;
 }
 
 function getPlaysetTarget(card) {
@@ -297,15 +297,15 @@ function renderStats() {
   const uniquePct = catalogSize > 0 ? Math.round((uniqueOwned / catalogSize) * 100) : 0;
   const foilPct = grandTotal > 0 ? Math.round((totalFoil / grandTotal) * 100) : 0;
 
-  document.getElementById('statTotalCopies').textContent = grandTotal.toLocaleString('de-DE');
-  document.getElementById('statNormalBreakdown').textContent = `(${totalNormal.toLocaleString('de-DE')} Normal / Sonderfinish)`;
-  document.getElementById('statFoilCopies').textContent = totalFoil.toLocaleString('de-DE');
-  document.getElementById('statFoilRatio').textContent = `${foilPct}% Foil-Anteil`;
-  document.getElementById('statUniqueOwned').textContent = uniqueOwned.toLocaleString('de-DE');
-  document.getElementById('statTotalCatalog').textContent = catalogSize.toLocaleString('de-DE');
+  document.getElementById('statTotalCopies').textContent = grandTotal.toLocaleString('en-US');
+  document.getElementById('statNormalBreakdown').textContent = `${totalNormal.toLocaleString('en-US')} normal`;
+  document.getElementById('statFoilCopies').textContent = totalFoil.toLocaleString('en-US');
+  document.getElementById('statFoilRatio').textContent = `${foilPct}%`;
+  document.getElementById('statUniqueOwned').textContent = uniqueOwned.toLocaleString('en-US');
+  document.getElementById('statTotalCatalog').textContent = catalogSize.toLocaleString('en-US');
   document.getElementById('statUniquePercent').textContent = `${uniquePct}%`;
   document.getElementById('statProgressBar').style.width = `${uniquePct}%`;
-  document.getElementById('statPlaysets').textContent = playsets.toLocaleString('de-DE');
+  document.getElementById('statPlaysets').textContent = playsets.toLocaleString('en-US');
 
   const dl = document.getElementById('catalogAutocomplete');
   dl.innerHTML = state.cards
@@ -704,7 +704,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('modalImageFile').value = '';
   });
 
+  const accountMenu = document.getElementById('accountMenu');
+  accountMenu.addEventListener('beforetoggle', e => {
+    if (e.newState !== 'open') return;
+    // Popovers open in the top layer; align this one below its trigger.
+    const r = document.getElementById('btnAccountMenu').getBoundingClientRect();
+    accountMenu.style.top = `${r.bottom + 8}px`;
+    accountMenu.style.right = `${Math.max(8, document.documentElement.clientWidth - r.right)}px`;
+  });
+  accountMenu.addEventListener('click', e => {
+    if (e.target.closest('[data-close-menu]')) accountMenu.hidePopover?.();
+  });
+  document.getElementById('inputImportJSON').addEventListener('change', () => accountMenu.hidePopover?.());
+
   const searchInput = document.getElementById('searchInput');
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    e.preventDefault();
+    searchInput.focus();
+  });
   searchInput.addEventListener('input', e => {
     state.search = e.target.value;
     renderListAndGrid();
@@ -935,14 +954,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const items=Array.isArray(imported) ? imported : imported.schemaVersion===3 ? imported.items : null;
         window.CollectionModel.validateItems(items);
         const restored=window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], items);
-        if (!confirm('Backup laden und den aktuellen Bestand ersetzen?')) return;
+        if (!confirm('Restore this backup and replace your current collection?')) return;
         state.cards=restored;
         persistenceEnabled=true;
         refreshCatalogControls();
         saveCollection();
         renderAll();
       } catch (err) {
-        alert('Ungültiges Backup: ' + err.message);
+        alert('Invalid backup: ' + err.message);
       }
     };
     reader.readAsText(file);

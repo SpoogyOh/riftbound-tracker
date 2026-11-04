@@ -6,7 +6,7 @@ A browser-based collection tracker for Riftbound TCG. Track normal and foil copi
 
 Hosted test environment: <https://riftbound-tracker-test.opiola-daniel.chatgpt.site/>. The owner reported successful login, persisted quantities, shared counts across two browser sessions, concurrent increments, and separate collections for two accounts on 2026-11-02. See the [verification record](docs/database.md#hosted-test-verification) for scope and remaining checks.
 
-Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The existing user interface uses German labels; card data is imported in English.
+Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The user interface is moving from German to English labels section by section; card data is imported in English.
 
 ## Run the app
 
@@ -27,10 +27,10 @@ Browser storage belongs to the browser profile and origin. Export a JSON backup 
 ## Use the online collection
 
 1. Open the hosted test environment linked above, or serve the app over HTTP locally. The `file:` standalone mode stays local.
-2. Use **Konto erstellen** to register, confirm your email, then sign in. An existing Supabase Auth account can sign in directly. Passwords are handled by Supabase Auth; the app does not store a separate password.
+2. Open the account menu (**Sign in**, top right) and use **Create account** to register, confirm your email, then sign in. An existing Supabase Auth account can sign in directly. Passwords are handled by Supabase Auth; the app does not store a separate password.
 3. Signed-in mode loads the online catalog and collection. All variants are paginated, so the default 1,000-row API cap does not truncate the catalog. Owned archived variants remain available.
-4. Add copies or edit counts. **Gespeichert · Supabase** confirms a server response. If a response is lost or an edit conflicts, the app reads the current server state and asks you to check it. It never repeats an uncertain increment automatically.
-5. **Online neu laden** fetches changes from another device. Signing out restores the separate local collection.
+4. Add copies or edit counts. **Saved · Supabase** in the header confirms a server response. If a response is lost or an edit conflicts, the app reads the current server state and asks you to check it. It never repeats an uncertain increment automatically.
+5. **Reload from server** in the account menu fetches changes from another device. Signing out restores the separate local collection.
 
 The current project URL and publishable browser key are configured in `src/cloud.ts`; both are public configuration. There is no service-role/secret key in the client. RLS restricts collection rows to their owner.
 

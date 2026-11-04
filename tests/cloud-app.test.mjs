@@ -20,7 +20,7 @@ async function app(t,state) {
   w.localStorage.setItem('riftbound_card_tracker_v2',JSON.stringify([{id:sample.id,source:'OpenRift',normal:5,foil:0}]));
   for(const source of sources) w.eval(source);
   d.dispatchEvent(new w.Event('DOMContentLoaded'));
-  await waitFor(()=>d.getElementById('authStatus').textContent.startsWith('Lokale Sammlung'));
+  await waitFor(()=>d.getElementById('authStatus').textContent.startsWith('Local collection'));
   const text=id=>d.getElementById(id).textContent;
   async function signIn(email='alice@example.test') {
     d.getElementById('authEmail').value=email;
@@ -35,7 +35,7 @@ test('real SDK login, online increment, lost response recovery and logout preser
   const state=apiFixture(), {w,d,text,signIn}=await app(t,state);
   assert.equal(text('statTotalCopies'),'5');
   await signIn();
-  await waitFor(()=>text('storageStatus').includes('Online-Sammlung geladen'));
+  await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
   assert.equal(d.querySelectorAll('#cardTableBody tr').length,1);
   assert.equal(text('statTotalCopies'),'0');
   assert.equal(d.getElementById('inputImportJSON').disabled,true);
@@ -45,10 +45,10 @@ test('real SDK login, online increment, lost response recovery and logout preser
   state.loseWrite=true;
   await w.adjustCardCount(sample.id,'normal',1);
   assert.equal(text('statTotalCopies'),'2');
-  assert.match(text('storageStatus'),/Aktueller Serverstand geladen/);
+  assert.match(text('storageStatus'),/Loaded the current server state/);
   assert.equal(state.calls.filter(c=>c.path.includes('/rpc/')).length,2);
   d.getElementById('btnSignOut').click();
-  await waitFor(()=>text('authStatus').startsWith('Lokale Sammlung'));
+  await waitFor(()=>text('authStatus').startsWith('Local collection'));
   assert.equal(text('statTotalCopies'),'5');
   assert.equal(d.getElementById('btnOpenAddModal').disabled,false);
 });
@@ -58,14 +58,14 @@ test('a loading failure locks cloud editing; switching accounts clears the previ
   const {d,text,signIn}=await app(t,state);
   state.failRead=true;
   await signIn();
-  await waitFor(()=>text('storageStatus').includes('Bearbeiten ist gesperrt'));
+  await waitFor(()=>text('storageStatus').includes('Editing is locked'));
   assert.equal(text('statTotalCopies'),'0');
   assert.equal(d.getElementById('btnOpenAddModal').disabled,true);
   state.failRead=false;
   d.getElementById('btnCloudRefresh').click();
   await waitFor(()=>text('statTotalCopies')==='2');
   d.getElementById('btnSignOut').click();
-  await waitFor(()=>text('authStatus').startsWith('Lokale Sammlung'));
+  await waitFor(()=>text('authStatus').startsWith('Local collection'));
   let release;
   state.pause=new Promise(resolve=>{release=resolve;});
   await signIn('bob@example.test');
@@ -86,7 +86,7 @@ test('an edit dialog opened before a remote refresh cannot replace the newer qua
   await waitFor(()=>text('statTotalCopies')==='8');
   d.getElementById('modalNormal').value='3';
   d.getElementById('modalCardForm').dispatchEvent(new w.Event('submit',{cancelable:true}));
-  await waitFor(()=>text('storageStatus').includes('Dialog schließen'));
+  await waitFor(()=>text('storageStatus').includes('Close the dialog'));
   assert.equal(state.rows.get(`${alice}:${sample.id}`).normal,8);
   assert.equal(state.calls.filter(c=>c.method==='PATCH').length,0);
 });
@@ -95,13 +95,13 @@ test('a late write response from a signed-out account never appears in the next 
   const state=apiFixture(undefined,[collectionRow(bob,sample.id,9)]);
   const {w,d,text,signIn}=await app(t,state);
   await signIn();
-  await waitFor(()=>text('storageStatus').includes('Online-Sammlung geladen'));
+  await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
   let release;
   state.pauseWrite=new Promise(resolve=>{release=resolve;});
   const pending=w.adjustCardCount(sample.id,'normal',1);
   await waitFor(()=>state.calls.some(c=>c.path.includes('/rpc/')));
   d.getElementById('btnSignOut').click();
-  await waitFor(()=>text('authStatus').startsWith('Lokale Sammlung'));
+  await waitFor(()=>text('authStatus').startsWith('Local collection'));
   await signIn('bob@example.test');
   await waitFor(()=>text('statTotalCopies')==='9');
   release(); await pending;
@@ -133,12 +133,12 @@ for (const failRecovery of [false, true]) {
     };
     const {w,d,text,signIn}=await app(t,state);
     await signIn();
-    await waitFor(()=>text('storageStatus').includes('Online-Sammlung geladen'));
+    await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
     recovering=true; state.loseWrite=true;
     const pending=w.adjustCardCount(sample.id,'normal',1);
     await waitFor(()=>held);
     d.getElementById('btnSignOut').click();
-    await waitFor(()=>text('authStatus').startsWith('Lokale Sammlung'));
+    await waitFor(()=>text('authStatus').startsWith('Local collection'));
     await signIn('bob@example.test');
     await waitFor(()=>text('statTotalCopies')==='9');
     const status=text('storageStatus');
@@ -160,7 +160,7 @@ test('registration waits for email confirmation and clears the password without 
   d.getElementById('authEmail').value='alice@example.test';
   d.getElementById('authPassword').value='example-password';
   d.getElementById('btnSignUp').click();
-  await waitFor(()=>text('authStatus').includes('bestätige deine E-Mail-Adresse'));
+  await waitFor(()=>text('authStatus').includes('Confirm your email address'));
   assert.equal(d.getElementById('authPassword').value,'');
   assert.equal(d.getElementById('authForm').hidden,false);
   assert.equal(text('statTotalCopies'),'5');

@@ -31,7 +31,7 @@ test('real catalog initializes; legacy counts, secondary domains, variants and I
   assert.equal(d.getElementById('statTotalCopies').textContent,'6');
   const target=w.DEFAULT_RIFTBOUND_CARDS.find(c=>c.number==='OGN-001'&&!c.variant);
   w.adjustCardCount(target.id,'normal',1);
-  await waitFor(()=>d.getElementById('storageStatus').textContent.includes('Gespeichert'));
+  await waitFor(()=>d.getElementById('storageStatus').textContent.includes('Saved'));
   assert.ok(w.localStorage.getItem('riftbound_card_tracker_v2'));
   const record=await w.CollectionStorage.load();
   assert.equal(record.schemaVersion,3);
@@ -60,7 +60,7 @@ test('storage falls back visibly and rejects a write when both stores fail',asyn
   const w=dom.window;
   w.eval(sources[2]);
   const record={schemaVersion:3,savedAt:new Date().toISOString(),items:[]};
-  assert.match(await w.CollectionStorage.save(record),/Fallback/);
+  assert.match(await w.CollectionStorage.save(record),/fallback/);
   assert.equal((await w.CollectionStorage.load()).schemaVersion,3);
   Object.defineProperty(w,'localStorage',{value:{setItem(){throw new Error('quota exceeded');}}});
   await assert.rejects(w.CollectionStorage.save(record));

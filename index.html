@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="de" class="dark">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Riftbound TCG – Karten &amp; Foil Tracker</title>
+  <title>Riftbound Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     [hidden] { display: none !important; }
-    button:disabled, input:disabled { opacity: .4; cursor: not-allowed; }
+    button:disabled, input:disabled, label:has(> input:disabled) { opacity: .4; cursor: not-allowed; }
+    #accountMenu { position: fixed; inset: auto; margin: 0; }
     @keyframes foilShimmer {
       0% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
@@ -69,115 +70,80 @@
   <div class="max-w-7xl mx-auto space-y-5">
 
     <!-- Header -->
-    <header class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-      <div class="space-y-1">
-        <div class="flex items-center gap-2.5 flex-wrap">
-          <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600 text-white font-bold text-sm shadow-sm">
-            RB
-          </span>
-          <h1 class="text-xl font-bold tracking-tight text-white">
-            Riftbound Karten-Tracker
-          </h1>
-          <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium border border-slate-700">
-            Digitales Sammelalbum • Normal &amp; Foil ✨
-          </span>
-        </div>
-        <p class="text-sm text-slate-400">
-          Tracke deine Standard- und Foil-Kopien mit Kartenbildern, Holo-Effekt und Playset-Fortschritt (3×).
-        </p>
+    <header class="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-slate-950/95 backdrop-blur border-b border-slate-800 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <h1 class="order-1 text-base font-semibold tracking-tight text-white whitespace-nowrap">Riftbound Tracker</h1>
+      <div class="order-3 w-full lg:order-2 lg:w-auto lg:flex-1 lg:max-w-xl relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="m14 14 4 4" stroke-linecap="round"/></svg>
+        <input
+          id="searchInput"
+          type="text"
+          aria-label="Search cards"
+          aria-keyshortcuts="/"
+          placeholder="Search name, number, champion or type"
+          class="peer w-full h-10 pl-9 pr-10 rounded-lg text-sm bg-slate-900 text-white placeholder-slate-500 border border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        <kbd class="hidden peer-placeholder-shown:block absolute right-3 top-1/2 -translate-y-1/2 px-1.5 rounded border border-slate-700 text-xs text-slate-500 font-sans pointer-events-none" aria-hidden="true">/</kbd>
+        <button id="btnClearSearch" type="button" aria-label="Clear search" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded text-slate-400 hover:text-white cursor-pointer">✕</button>
       </div>
+      <p id="storageStatus" role="status" aria-live="polite" class="order-4 w-full lg:order-3 lg:w-auto lg:max-w-sm lg:ml-auto lg:text-right text-xs text-slate-400">Loading collection…</p>
+      <button id="btnAccountMenu" type="button" popovertarget="accountMenu" class="order-2 ml-auto lg:order-4 lg:ml-0 inline-flex items-center gap-2 h-10 px-3 rounded-lg text-sm text-slate-200 border border-slate-800 hover:bg-slate-900 cursor-pointer">
+        <span id="accountLabel" class="max-w-[16rem] truncate">Sign in</span>
+        <svg class="w-3 h-3 text-slate-500" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </header>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <button id="btnOpenAddModal" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition cursor-pointer shadow-sm">
-          <span>＋ Neue Karte anlegen</span>
-        </button>
-        <button id="btnExportCSV" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-          <span>📊 CSV Export</span>
-        </button>
-        <button id="btnExportJSON" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-          <span>💾 Backup speichern</span>
-        </button>
-        <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-          <span>📂 Backup laden</span>
+    <!-- Account menu: sign-in, sync, and collection data actions -->
+    <div id="accountMenu" popover class="w-80 max-w-[calc(100vw-1rem)] p-4 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 shadow-xl space-y-4">
+      <form id="authForm" class="space-y-3">
+        <p class="text-sm font-medium text-white">Sign in to use your online collection</p>
+        <label class="block text-xs text-slate-400">Email
+          <input id="authEmail" type="email" required autocomplete="username" class="block w-full mt-1 h-10 px-3 rounded-lg bg-slate-950 border border-slate-700 text-sm text-white" />
+        </label>
+        <label class="block text-xs text-slate-400">Password
+          <input id="authPassword" type="password" required minlength="8" autocomplete="current-password" class="block w-full mt-1 h-10 px-3 rounded-lg bg-slate-950 border border-slate-700 text-sm text-white" />
+        </label>
+        <div class="flex gap-2">
+          <button id="btnSignIn" type="submit" class="flex-1 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white cursor-pointer">Sign in</button>
+          <button id="btnSignUp" type="button" class="flex-1 h-10 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm text-slate-200 cursor-pointer">Create account</button>
+        </div>
+      </form>
+      <div id="authSignedIn" hidden class="space-y-3">
+        <div>
+          <p class="text-xs text-slate-400">Signed in as</p>
+          <p id="authAccount" class="text-sm font-medium text-white truncate"></p>
+        </div>
+        <div class="flex gap-2">
+          <button id="btnCloudRefresh" type="button" class="flex-1 h-10 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm text-slate-200 cursor-pointer">Reload from server</button>
+          <button id="btnSignOut" type="button" class="flex-1 h-10 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm text-slate-200 cursor-pointer">Sign out</button>
+        </div>
+      </div>
+      <p id="authStatus" role="status" class="text-xs text-slate-400">Without an account, your collection stays in this browser. Custom cards and backup restore are available in local mode only.</p>
+      <div class="pt-3 border-t border-slate-800 -mx-2 space-y-0.5" role="group" aria-label="Collection data">
+        <button id="btnOpenAddModal" type="button" data-close-menu class="w-full text-left px-2 py-2 rounded-lg text-sm text-slate-200 hover:bg-slate-800 cursor-pointer">New custom card…</button>
+        <button id="btnExportCSV" type="button" data-close-menu class="w-full text-left px-2 py-2 rounded-lg text-sm text-slate-200 hover:bg-slate-800 cursor-pointer">Export CSV</button>
+        <button id="btnExportJSON" type="button" data-close-menu class="w-full text-left px-2 py-2 rounded-lg text-sm text-slate-200 hover:bg-slate-800 cursor-pointer">Download backup (JSON)</button>
+        <label class="block px-2 py-2 rounded-lg text-sm text-slate-200 hover:bg-slate-800 cursor-pointer">
+          Restore backup…
           <input id="inputImportJSON" type="file" accept=".json" class="hidden" />
         </label>
       </div>
-    </header>
+    </div>
 
-    <section class="text-xs text-slate-400 space-y-1" aria-live="polite">
-      <p>Kartendaten: <a href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-indigo-300 underline">OpenRift</a> · <span id="catalogStatus"></span></p>
-      <p id="storageStatus" role="status">Sammlung wird geladen …</p>
-      <p>Riftbound Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
-    </section>
-    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3" aria-label="Konto und Online-Sammlung">
-      <h2 class="text-sm font-semibold">Deine Sammlung · lokal oder online</h2>
-      <form id="authForm" class="flex flex-wrap items-end gap-3">
-        <label class="text-xs text-slate-300">E-Mail
-          <input id="authEmail" type="email" required autocomplete="username" class="block mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm" />
-        </label>
-        <label class="text-xs text-slate-300">Passwort
-          <input id="authPassword" type="password" required minlength="8" autocomplete="current-password" class="block mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm" />
-        </label>
-        <button id="btnSignIn" type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm">Anmelden</button>
-        <button id="btnSignUp" type="button" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm">Konto erstellen</button>
-      </form>
-      <div id="authSignedIn" hidden class="flex flex-wrap items-center gap-3 text-sm">
-        <span id="authAccount"></span>
-        <button id="btnCloudRefresh" type="button" class="rounded-lg bg-indigo-600 px-3 py-2">Online neu laden</button>
-        <button id="btnSignOut" type="button" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">Abmelden</button>
+    <!-- Collection summary -->
+    <section aria-label="Collection progress" class="space-y-1.5">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <p class="text-sm text-slate-400"><span id="statUniqueOwned" class="text-2xl font-semibold text-white tabular-nums">0</span> / <span id="statTotalCatalog" class="tabular-nums">0</span> variants</p>
+        <div class="w-40 h-1 rounded-full bg-slate-800 overflow-hidden" aria-hidden="true">
+          <div id="statProgressBar" class="h-full bg-indigo-500 transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <span id="statUniquePercent" class="text-sm font-medium text-slate-300 tabular-nums">0%</span>
       </div>
-      <p id="authStatus" role="status" class="text-xs text-slate-400">Ohne Anmeldung bleibt die Sammlung lokal. Online sind Katalogkarten verfügbar; eigene Karten und Backup-Import bleiben im lokalen Modus.</p>
-    </section>
-    <!-- Stats Row -->
-    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Gesamte Karten (Kopien)</span>
-          <span class="text-sm">🃏</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="statTotalCopies" class="text-2xl font-bold text-white">0</span>
-          <span id="statNormalBreakdown" class="text-xs text-slate-400">(0 Normal)</span>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Foil-Kopien ✨</span>
-          <span class="text-xs px-2 py-0.5 rounded-full foil-badge text-amber-200 font-semibold">FOIL</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="statFoilCopies" class="text-2xl font-bold text-amber-300">0</span>
-          <span id="statFoilRatio" class="text-xs text-slate-400">0% Foil-Anteil</span>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Sammelalbum-Fortschritt</span>
-          <span id="statUniquePercent" class="text-xs font-semibold text-indigo-400">0%</span>
-        </div>
-        <div class="mt-2">
-          <div class="flex items-baseline gap-1.5">
-            <span id="statUniqueOwned" class="text-2xl font-bold text-white">0</span>
-            <span class="text-xs text-slate-400">von <span id="statTotalCatalog">0</span> Karten</span>
-          </div>
-          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-2">
-            <div id="statProgressBar" class="h-full bg-indigo-500 transition-all duration-300" style="width: 0%"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Komplette Playsets (3+)</span>
-          <span class="text-sm">✅</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="statPlaysets" class="text-2xl font-bold text-emerald-400">0</span>
-          <span class="text-xs text-slate-400">spielfertige Sets</span>
-        </div>
-      </div>
+      <p class="text-sm text-slate-400 tabular-nums">
+        <span id="statTotalCopies" class="text-slate-200">0</span> copies ·
+        <span id="statNormalBreakdown" title="Normal or special-finish copies">0 normal</span> ·
+        <span id="statFoilCopies" class="text-amber-300">0</span> foil (<span id="statFoilRatio">0%</span>) ·
+        <span id="statPlaysets" class="text-slate-200">0</span> <span title="Variants with a full playset: 3 copies, or 1 for Legends and Battlefields">playsets</span>
+      </p>
     </section>
 
     <!-- Quick Entry Bar -->
@@ -234,22 +200,9 @@
       <p id="quickAddFeedback" class="text-xs text-emerald-400 mt-2 hidden"></p>
     </section>
 
-    <!-- Filter & Search Controls -->
+    <!-- Filter Controls -->
     <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm space-y-3.5">
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div class="relative flex-1">
-          <input
-            id="searchInput"
-            type="text"
-            placeholder="Suche nach Kartenname, Nummer (OGN-001), Champion oder Kartentyp..."
-            class="w-full pl-9 pr-8 py-2 rounded-lg text-sm bg-slate-950 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <span class="absolute left-3 top-2.5 text-sm text-slate-400">🔍</span>
-          <button id="btnClearSearch" type="button" class="hidden absolute right-2.5 top-2 text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
-            ✕
-          </button>
-        </div>
-
         <div class="flex flex-wrap items-center gap-1.5" id="ownershipTabs">
           <button type="button" data-ownership="all" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer transition">
             Alle
@@ -397,6 +350,11 @@
         </button>
       </div>
     </div>
+
+    <footer class="pt-6 pb-2 text-xs text-slate-500 space-y-1">
+      <p>Card data: <a href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-slate-400 underline">OpenRift</a> · <span id="catalogStatus"></span></p>
+      <p>Riftbound Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
+    </footer>
 
   </div>
 
