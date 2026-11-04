@@ -104,7 +104,7 @@ export interface NormalizedCatalog {
   metadata: CatalogMetadata;
 }
 
-/** Compact catalog-backed entry written by collection.js. */
+/** Compact catalog-backed entry in a JSON backup written by app.js. */
 export interface SavedCatalogEntry extends CollectionQuantities {
   id: string;
   source: 'OpenRift';

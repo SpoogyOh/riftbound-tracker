@@ -18,15 +18,16 @@ function accountClient(userId: string) {
 
 interface Bridge {
   show(cards: CloudCard[], catalog: CloudCard[]): void;
-  local(isCurrent: () => boolean): Promise<void>;
   clear(): void;
   render(): void;
   status(message: string, error?: boolean): void;
 }
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+// The page shows the sign-in screen or the collection from this attribute ('loading' until Auth answers).
+const showSession = (state: 'signed-in' | 'signed-out') => { document.body.dataset.session = state; };
 
 class CloudController {
-  mode: 'local' | 'loading' | 'cloud' = 'loading';
+  mode: 'signed-out' | 'loading' | 'cloud' = 'loading';
   busy = false;
   ready = false;
   catalog: CloudCard[] | null = null;
@@ -58,9 +59,10 @@ class CloudController {
     // Clear old account data immediately, including while the next request is pending.
     this.bridge.clear();
     element('authAccount').textContent = session?.user.email ?? '';
-    element('accountLabel').textContent = session?.user.email ?? 'Sign in';
-    element('authForm').hidden = !!session;
+    element('accountLabel').textContent = session?.user.email ?? '';
     element('authSignedIn').hidden = !session;
+    showSession(session ? 'signed-in' : 'signed-out');
+    this.message('');
     setTimeout(() => {
       if (generation !== this.generation) return;
       if (nextId) {
@@ -68,17 +70,11 @@ class CloudController {
         this.mode = 'cloud';
         void this.refresh();
       } else {
-        void this.restoreLocal(generation);
+        this.mode = 'signed-out';
+        this.bridge.render();
+        this.bridge.status('');
       }
     }, 0);
-  }
-
-  private async restoreLocal(generation: number): Promise<void> {
-    await this.bridge.local(() => generation === this.generation);
-    if (generation !== this.generation) return;
-    this.mode = 'local'; this.ready = true;
-    this.bridge.render();
-    this.message('Local collection · saved only in this browser.');
   }
 
   async refresh(): Promise<void> {
@@ -93,7 +89,6 @@ class CloudController {
       this.bridge.show(cards, repository.catalog);
       this.ready = true;
       this.bridge.status('Online collection loaded · Supabase');
-      this.message('Online collection · changes save immediately. Your local collection stays separate; custom cards and backup restore remain local.');
     } catch {
       if (generation !== this.generation) return;
       this.bridge.status('Couldn’t load the online collection. Editing is locked. Reload or sign out.', true);
@@ -166,7 +161,7 @@ class CloudController {
     try {
       const { error } = await client.auth.signOut({ scope: 'local' });
       if (error) throw error;
-    } catch { this.message('Sign-out failed. Check your connection and try again.'); }
+    } catch { this.bridge.status('Sign-out failed. Check your connection and try again.', true); }
     finally { this.setAuthBusy(false); }
   }
 }
@@ -175,8 +170,8 @@ declare global { interface Window { RiftboundCloud: { start(bridge: Bridge): Clo
 window.RiftboundCloud = { start: bridge => {
   if (location.protocol === 'file:') {
     element('authForm').hidden = true;
-    element('authStatus').textContent = 'Local file mode. Open the tracker over HTTP or HTTPS to use the online collection.';
-    element('accountLabel').textContent = 'Local file';
+    element('authStatus').textContent = 'Open the tracker over HTTP or HTTPS to sign in.';
+    showSession('signed-out');
     return null;
   }
   return new CloudController(bridge);

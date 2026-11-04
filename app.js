@@ -109,47 +109,18 @@ function handleCardImageError(imgEl, cardId) {
   }
 }
 
-let persistenceEnabled = true;
 let cloud = null;
 let liveCatalog = null;
 let modalCloudToken;
-function currentCatalog() { return liveCatalog || window.DEFAULT_RIFTBOUND_CARDS || []; }
-function onlineMode() { return !!cloud && cloud.mode !== 'local'; }
+function currentCatalog() { return liveCatalog || []; }
 function setStorageStatus(message, error = false) {
   const el = document.getElementById('storageStatus');
   el.textContent = message;
   el.classList.toggle('text-red-700', error);
 }
-async function loadCollection(isCurrent = () => true) {
-  try {
-    const saved = await window.CollectionStorage.load();
-    if (!isCurrent()) return;
-    state.cards = window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], saved);
-    persistenceEnabled = true;
-    const review = state.cards.filter(c => c.migrationReview).length;
-    setStorageStatus(review ? `${review} earlier entries kept for review.` : 'Collection loaded.');
-  } catch (error) {
-    if (!isCurrent()) return;
-    persistenceEnabled = false;
-    state.cards = (window.DEFAULT_RIFTBOUND_CARDS || []).map(c => ({...c}));
-    setStorageStatus('Couldn’t read the saved collection. Download a backup and reload the page; saving is locked.', true);
-  }
-}
-function saveCollection() {
-  if (!persistenceEnabled || onlineMode()) return Promise.resolve(false);
-  const record = window.CollectionModel.snapshot(state.cards, currentCatalog());
-  setStorageStatus('Saving…');
-  return window.CollectionStorage.save(record).then(mode => {
-    if (!onlineMode()) setStorageStatus(`Saved · ${mode}`);
-    return true;
-  }).catch(() => {
-    if (!onlineMode()) setStorageStatus('Saving failed. Download a JSON backup now.', true);
-    return false;
-  });
-}
 function cardDomains(card) { return card.domains?.length ? card.domains : [card.domain || 'Neutral']; }
 function cardLabel(card) {
-  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.migrationReview ? ' [Review match]' : '') + (card.active === false ? ' [Archived]' : '');
+  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.active === false ? ' [Archived]' : '');
 }
 function canCount(card, field) {
   if (cloud?.locked) return false;
@@ -158,19 +129,27 @@ function canCount(card, field) {
 function refreshCatalogControls() {
   for (const [id, values] of [
     ['filterSet', [...new Set(state.cards.map(c=>c.set))]],
-    ['modalSet', [...new Set([...state.cards.map(c=>c.set), 'PRM'])]],
     ['filterType', [...new Set(state.cards.map(c=>c.type))]],
-    ['modalType', [...new Set([...state.cards.map(c=>c.type), ...Object.keys(TYPE_ICON)])]],
-    ['filterRarity', [...new Set(state.cards.map(c=>c.rarity))]],
-    ['modalRarity', [...new Set(state.cards.map(c=>c.rarity))]]
+    ['filterRarity', [...new Set(state.cards.map(c=>c.rarity))]]
   ]) {
     const el=document.getElementById(id), selected=el.value;
-    el.innerHTML=(id.startsWith('filter') ? '<option value="all">All</option>' : '') + values.sort().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    el.innerHTML='<option value="all">All</option>' + values.sort().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
     if ([...el.options].some(o=>o.value===selected)) el.value=selected;
   }
-  const meta=window.OPENRIFT_CATALOG_META;
-  if (liveCatalog) document.getElementById('catalogStatus').textContent=`${liveCatalog.length.toLocaleString('en-US')} variants · Supabase`;
-  else if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount.toLocaleString('en-US')} variants · ${meta.printingCount.toLocaleString('en-US')} printings · updated ${meta.importedAt.slice(0,10)}`;
+  document.getElementById('catalogStatus').textContent = liveCatalog ? ` · ${liveCatalog.length.toLocaleString('en-US')} variants · Supabase` : '';
+}
+
+// JSON backups keep schema version 3: owned counts and image overrides of catalog variants.
+function backupRecord() {
+  const byId = new Map(currentCatalog().map(c => [c.id, c]));
+  const items = state.cards.flatMap(c => {
+    const base = byId.get(c.id);
+    const imageOverride = base && c.imageUrl !== base.imageUrl ? c.imageUrl : undefined;
+    if (!c.normal && !c.foil && !imageOverride) return [];
+    return [{ id: c.id, source: 'OpenRift', sourcePrintingIds: c.sourcePrintingIds, name: c.name, number: c.number,
+      normal: c.normal || 0, foil: c.foil || 0, imageOverride }];
+  });
+  return { schemaVersion: 3, savedAt: new Date().toISOString(), items };
 }
 
 function getPlaysetTarget(card) {
@@ -183,25 +162,15 @@ function updateCardCount(cardId, field, newValue) {
   if (idx === -1) return;
   if (!canCount(state.cards[idx], field)) return;
   const cleanVal = Math.max(0, Math.min(999, parseInt(newValue, 10) || 0));
-  if (onlineMode()) return cloud.change(cardId, { [field]: cleanVal });
-  state.cards[idx][field] = cleanVal;
-  saveCollection();
-  renderAll();
-  if (state.activeCardId === cardId) {
-    syncCardPanel(cardId);
-  }
+  return cloud?.change(cardId, { [field]: cleanVal });
 }
 
 function adjustCardCount(cardId, field, delta) {
   const idx = state.cards.findIndex(c => c.id === cardId);
   if (idx === -1) return;
   if (!canCount(state.cards[idx], field)) return;
-  if (onlineMode()) {
-    if (state.cards[idx][field] + delta < 0 || state.cards[idx][field] + delta > 999) return;
-    return cloud.change(cardId, { finish: field, delta });
-  }
-  const current = state.cards[idx][field] || 0;
-  updateCardCount(cardId, field, current + delta);
+  if (state.cards[idx][field] + delta < 0 || state.cards[idx][field] + delta > 999) return;
+  return cloud?.change(cardId, { finish: field, delta });
 }
 
 function getFilteredCards() {
@@ -330,6 +299,9 @@ function renderListAndGrid() {
     emptyEl.classList.remove('hidden');
     tableContainer.classList.add('hidden');
     gridContainer.classList.add('hidden');
+    // Drop stale results too, e.g. the previous account's cards after signing out.
+    gridContainer.innerHTML = '';
+    document.getElementById('cardTableBody').innerHTML = '';
     if (state.activeCardId) syncCardPanel(state.activeCardId);
     return;
   }
@@ -538,9 +510,6 @@ function renderGridCards(cards) {
 function renderAll() {
   renderStats();
   renderListAndGrid();
-  for (const id of ['btnOpenAddModal', 'btnEmptyAddCard', 'inputImportJSON']) {
-    document.getElementById(id).disabled = onlineMode();
-  }
   document.querySelector('#modalCardForm button[type="submit"]').disabled = !!cloud?.locked;
   document.getElementById('btnCloudRefresh').disabled = !!cloud?.busy;
 }
@@ -614,7 +583,7 @@ function closeCardPanel() {
 }
 
 // Capture: fast entry for a pile of cards. Enter adds one copy in the chosen finish;
-// several matches need an explicit choice, and unknown input never creates a card.
+// several matches need an explicit choice, and unknown input changes nothing.
 const CAPTURE_SHOWN = 8;
 const capture = { finish: 'normal', candidates: [], index: -1, log: [], nextId: 1 };
 
@@ -641,9 +610,6 @@ function renderCaptureCandidates() {
         <span class="text-xs block">${escapeHtml(card.number)} · ${card.normal || 0} normal · ${card.foil || 0} foil</span>
       </span>
     </button>`).join('');
-  if (input.value.trim() && !capture.candidates.length && !onlineMode()) {
-    list.innerHTML = `<button type="button" data-create class="caps text-xs underline cursor-pointer">Create custom card “${escapeHtml(input.value.trim())}”…</button>`;
-  }
   if (capture.index >= 0) input.setAttribute('aria-activedescendant', `capture-option-${capture.index}`);
   else input.removeAttribute('aria-activedescendant');
 }
@@ -656,7 +622,7 @@ function updateCaptureCandidates() {
   capture.index = count === 1 ? 0 : -1;
   renderCaptureCandidates();
   if (!raw.trim()) setCaptureMessage('');
-  else if (!count) setCaptureMessage(onlineMode() ? 'No card in the online catalog matches.' : 'No card found.');
+  else if (!count) setCaptureMessage('No card found.');
   else if (count === 1) setCaptureMessage('Enter adds this card.');
   else setCaptureMessage(`${count} cards match. Choose one with ↑ ↓ or a click.${count > CAPTURE_SHOWN ? ` Showing the first ${CAPTURE_SHOWN}; keep typing.` : ''}`);
 }
@@ -733,40 +699,13 @@ function closeCapture() {
   if (dialog.open) dialog.close ? dialog.close() : dialog.removeAttribute('open');
 }
 
-function openAddModal(prefillName = '') {
-  if (onlineMode()) return;
-  for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity','modalNormal','modalFoil']) document.getElementById(id).disabled=false;
-  document.getElementById('modalTitle').textContent = 'New custom card';
-  document.getElementById('modalCardId').value = '';
-  const nextNum = `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
-  document.getElementById('modalNumber').value = nextNum;
-  document.getElementById('modalName').value = prefillName;
-  document.getElementById('modalSet').value = 'OGN';
-  document.getElementById('modalDomain').value = 'Fury';
-  document.getElementById('modalType').value = 'Unit';
-  document.getElementById('modalRarity').value = 'Common';
-  document.getElementById('modalImageUrl').value = '';
-  document.getElementById('modalNormal').value = 1;
-  document.getElementById('modalFoil').value = 0;
-  document.getElementById('cardModal').classList.remove('hidden');
-  document.getElementById('modalName').focus();
-}
-
 function openEditModal(cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card || cloud?.locked) return;
-  for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity']) document.getElementById(id).disabled=card.source==='OpenRift';
   document.getElementById('modalNormal').disabled=!canCount(card,'normal');
   document.getElementById('modalFoil').disabled=!canCount(card,'foil');
   modalCloudToken = cloud?.editToken(cardId);
-  document.getElementById('modalTitle').textContent = 'Edit card & image';
   document.getElementById('modalCardId').value = card.id;
-  document.getElementById('modalNumber').value = card.number;
-  document.getElementById('modalName').value = card.name;
-  document.getElementById('modalSet').value = card.set || 'OGN';
-  document.getElementById('modalDomain').value = card.domain || 'Fury';
-  document.getElementById('modalType').value = card.type || 'Unit';
-  document.getElementById('modalRarity').value = card.rarity || 'Common';
   document.getElementById('modalImageUrl').value = card.imageUrl || '';
   document.getElementById('modalNormal').value = card.normal || 0;
   document.getElementById('modalFoil').value = card.foil || 0;
@@ -789,11 +728,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       status: setStorageStatus,
       clear() { liveCatalog = null; state.cards = []; closeModal(); closeCardPanel(); closeCapture(); renderAll(); },
       show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
-      async local(isCurrent) { await loadCollection(isCurrent); if (isCurrent()) refreshCatalogControls(); },
       render: renderAll
     });
   }
-  if (!cloud) { await loadCollection(); refreshCatalogControls(); }
   renderAll();
 
   document.getElementById('btnClosePanel').addEventListener('click', closeCardPanel);
@@ -844,7 +781,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   accountMenu.addEventListener('click', e => {
     if (e.target.closest('[data-close-menu]')) accountMenu.hidePopover?.();
   });
-  document.getElementById('inputImportJSON').addEventListener('change', () => accountMenu.hidePopover?.());
 
   const searchInput = document.getElementById('searchInput');
   document.addEventListener('keydown', e => {
@@ -959,20 +895,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('captureCandidates').addEventListener('click', e => {
     const option = e.target.closest('[data-index]');
-    if (option) { captureInput.focus(); addCaptured(capture.candidates[Number(option.dataset.index)]); return; }
-    if (e.target.closest('[data-create]')) {
-      const name = captureInput.value.trim();
-      closeCapture();
-      openAddModal(name);
-    }
+    if (option) { captureInput.focus(); addCaptured(capture.candidates[Number(option.dataset.index)]); }
   });
   document.getElementById('captureLog').addEventListener('click', e => {
     const undo = e.target.closest('[data-undo]');
     if (undo) undoCaptured(Number(undo.dataset.undo));
   });
 
-  document.getElementById('btnOpenAddModal').addEventListener('click', () => openAddModal());
-  document.getElementById('btnEmptyAddCard').addEventListener('click', () => openAddModal(state.search));
   document.getElementById('btnCloseModal').addEventListener('click', closeModal);
   document.getElementById('btnCancelModal').addEventListener('click', closeModal);
 
@@ -980,82 +909,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     if (cloud?.locked) return;
     const existingId = document.getElementById('modalCardId').value;
-    const number = document.getElementById('modalNumber').value.trim();
-    const name = document.getElementById('modalName').value.trim();
-    const set = document.getElementById('modalSet').value;
-    const domain = document.getElementById('modalDomain').value;
-    const type = document.getElementById('modalType').value;
-    const rarity = document.getElementById('modalRarity').value;
     const catalogCard = currentCatalog().find(c => c.id === existingId);
     const imageUrl = document.getElementById('modalImageUrl').value.trim() || catalogCard?.imageUrl || '';
     const normal = Math.max(0, parseInt(document.getElementById('modalNormal').value, 10) || 0);
     const foil = Math.max(0, parseInt(document.getElementById('modalFoil').value, 10) || 0);
 
-    if (onlineMode()) {
-      if (!catalogCard) return;
-      const ok = await cloud.change(existingId, { normal, foil, image_override: imageUrl === catalogCard.imageUrl ? null : imageUrl }, modalCloudToken);
-      if (ok) closeModal();
-      return;
-    }
-    if (existingId) {
-      const idx = state.cards.findIndex(c => c.id === existingId);
-      if (idx !== -1) {
-        state.cards[idx] = { ...state.cards[idx], number, name, set, domain, type, rarity, imageUrl, normal, foil };
-      }
-    } else {
-      state.cards.unshift({
-        id: `custom-${crypto.randomUUID()}`,
-        number,
-        name,
-        set,
-        domain,
-        type,
-        rarity,
-        imageUrl,
-        normal,
-        foil
-      });
-    }
-
-    refreshCatalogControls();
-    saveCollection();
-    closeModal();
-    renderAll();
+    if (!catalogCard) return;
+    const ok = await cloud.change(existingId, { normal, foil, image_override: imageUrl === catalogCard.imageUrl ? null : imageUrl }, modalCloudToken);
+    if (ok) closeModal();
   });
 
   document.getElementById('btnExportJSON').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(window.CollectionModel.snapshot(state.cards, currentCatalog()), null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(backupRecord(), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `riftbound-sammlung-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  });
-
-  document.getElementById('inputImportJSON').addEventListener('change', e => {
-    if (onlineMode()) return;
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        if (onlineMode()) return;
-        const imported = JSON.parse(ev.target.result);
-        const items=Array.isArray(imported) ? imported : imported.schemaVersion===3 ? imported.items : null;
-        window.CollectionModel.validateItems(items);
-        const restored=window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], items);
-        if (!confirm('Restore this backup and replace your current collection?')) return;
-        state.cards=restored;
-        persistenceEnabled=true;
-        refreshCatalogControls();
-        saveCollection();
-        renderAll();
-      } catch (err) {
-        alert('Invalid backup: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
   });
 
   document.getElementById('btnExportCSV').addEventListener('click', () => {
