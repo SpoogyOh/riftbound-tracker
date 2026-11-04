@@ -20,7 +20,7 @@ cd riftbound-tracker
 python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
-Open <http://127.0.0.1:8765>. Node.js and npm are needed for development commands and catalog updates, not to run the bundled app. Styling uses Tailwind's CDN script; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
+Open <http://127.0.0.1:8765>. Node.js and npm are needed for development commands and catalog updates, not to run the bundled app. Styling uses Tailwind's CDN script and the self-hosted Archivo font in `fonts/`; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
 
 Browser storage belongs to the browser profile and origin. Export a JSON backup before moving between a local file, a local server, or another domain. Without signing in, the collection stays in that browser. Sign in to use your private Supabase collection from multiple devices. Local and online collections are separate; signing in never uploads or replaces your existing local records.
 
@@ -57,7 +57,8 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | File or directory | Responsibility | When to change it |
 | --- | --- | --- |
 | `README.md` | Project overview, setup instructions, repository map, and data-flow guide. | Explain how to use or develop the project. |
-| `index.html` | Main page structure: buttons, forms, table, grid, dialogs, and custom CSS. Loads the shared JavaScript files. | Change the interface layout or add a control. |
+| `index.html` | Main page structure: buttons, forms, table, grid, dialogs, and custom CSS. Design tokens (colors, type, control styles) live in its `<style>` block. Loads the shared JavaScript files. | Change the interface layout, look, or add a control. |
+| `fonts/` | Self-hosted Archivo variable font (SIL Open Font License, see `OFL.txt`). The standalone build embeds it. | Replace or update the interface font. |
 | `src/cloud.ts` | TypeScript login/session controller and account-bound Supabase clients. | Change authentication and online state transitions. |
 | `src/cloud-repository.ts` | Typed paginated catalog reads, private collection reads, atomic adjustments, and revision-checked edits. | Change online data access. |
 | `cloud.js` | Generated browser bundle including the pinned Supabase SDK. | Regenerate with `npm run build:browser`; edit `src/` instead. |

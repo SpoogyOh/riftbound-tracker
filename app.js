@@ -2,13 +2,13 @@ const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
 const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
 
 const DOMAIN_META = {
-  Fury:    { icon: '🔴', label: 'Fury',    bg1: '#7f1d1d', bg2: '#dc2626', accent: '#fca5a5' },
-  Calm:    { icon: '🟢', label: 'Calm',    bg1: '#064e3b', bg2: '#10b981', accent: '#6ee7b7' },
-  Mind:    { icon: '🔵', label: 'Mind',    bg1: '#1e3a8a', bg2: '#3b82f6', accent: '#93c5fd' },
-  Body:    { icon: '🟡', label: 'Body',    bg1: '#78350f', bg2: '#f59e0b', accent: '#fde68a' },
-  Chaos:   { icon: '🟣', label: 'Chaos',   bg1: '#4c1d95', bg2: '#9333ea', accent: '#d8b4fe' },
-  Order:   { icon: '🟠', label: 'Order',   bg1: '#7c2d12', bg2: '#ea580c', accent: '#fdba74' },
-  Neutral: { icon: '⚪', label: 'Neutral', bg1: '#1e293b', bg2: '#475569', accent: '#cbd5e1' }
+  Fury:    { label: 'Fury',    bg1: '#7f1d1d', bg2: '#dc2626', accent: '#fca5a5' },
+  Calm:    { label: 'Calm',    bg1: '#064e3b', bg2: '#10b981', accent: '#6ee7b7' },
+  Mind:    { label: 'Mind',    bg1: '#1e3a8a', bg2: '#3b82f6', accent: '#93c5fd' },
+  Body:    { label: 'Body',    bg1: '#78350f', bg2: '#f59e0b', accent: '#fde68a' },
+  Chaos:   { label: 'Chaos',   bg1: '#4c1d95', bg2: '#9333ea', accent: '#d8b4fe' },
+  Order:   { label: 'Order',   bg1: '#7c2d12', bg2: '#ea580c', accent: '#fdba74' },
+  Neutral: { label: 'Neutral', bg1: '#1e293b', bg2: '#475569', accent: '#cbd5e1' }
 };
 
 const TYPE_ICON = {
@@ -118,7 +118,7 @@ function onlineMode() { return !!cloud && cloud.mode !== 'local'; }
 function setStorageStatus(message, error = false) {
   const el = document.getElementById('storageStatus');
   el.textContent = message;
-  el.classList.toggle('text-red-300', error);
+  el.classList.toggle('text-red-700', error);
 }
 async function loadCollection(isCurrent = () => true) {
   try {
@@ -271,7 +271,7 @@ function renderPlaysetDots(total, target) {
   let dots = '';
   for (let i = 1; i <= target; i++) {
     const filled = total >= i;
-    dots += `<span class="inline-block w-2 h-2 rounded-full ${filled ? 'bg-indigo-500' : 'bg-slate-700 border border-slate-600'}"></span>`;
+    dots += `<span class="inline-block w-2 h-2 rounded-full ${filled ? 'bg-ink' : 'border border-line'}"></span>`;
   }
   return dots;
 }
@@ -317,7 +317,7 @@ function renderListAndGrid() {
   const filtered = getFilteredCards();
   const totalCatalog = state.cards.length;
   document.getElementById('resultsCounter').textContent =
-    `Zeige ${filtered.length} von ${totalCatalog} Karten • Klicke auf ein Kartenbild für die Großansicht 🔍`;
+    `Zeige ${filtered.length} von ${totalCatalog} Karten • Klicke auf ein Kartenbild für die Großansicht`;
 
   const hasFilters =
     state.search !== '' ||
@@ -365,13 +365,13 @@ function renderTableRows(cards) {
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
-      <tr class="group hover:bg-slate-800/60 transition">
-        <td class="py-2 px-4">
+      <tr class="group hover:bg-soft/40 transition">
+        <td class="py-2 pr-3">
           <div class="flex items-center gap-3">
             <button
               type="button"
               onclick="openLightbox('${escapeHtml(card.id)}')"
-              class="relative w-10 h-14 rounded-md overflow-hidden border border-slate-700 bg-slate-950 shrink-0 cursor-pointer shadow-xs group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
+              class="relative w-10 h-14 rounded overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
               title="Kartenbild vergrößern"
             >
               <img
@@ -385,57 +385,57 @@ function renderTableRows(cards) {
             </button>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-mono text-xs font-semibold text-slate-400">${escapeHtml(card.number)}</span>
-                ${foil > 0 ? `<span class="text-xs px-2 py-0.5 rounded-full foil-badge font-semibold text-amber-200">✨ ${foil}× Foil</span>` : ''}
+                <span class="text-xs text-muted tabular-nums">${escapeHtml(card.number)}</span>
+                ${foil > 0 ? `<span class="caps text-[11px] px-1.5 rounded-[3px] border border-line foil-badge text-foil">${foil}× Foil</span>` : ''}
               </div>
-              <div class="font-semibold text-sm text-slate-100 truncate">${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}</div>
+              <div class="caps text-sm truncate">${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}</div>
             </div>
           </div>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
-          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
-            <span>${dMeta.icon}</span>
+          <span class="inline-flex items-center gap-1.5 text-xs">
+            <span class="dot" style="background:${dMeta.bg2}"></span>
             <span>${escapeHtml(cardDomains(card).join(' / '))}</span>
           </span>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
           <div class="flex items-center gap-1.5 text-xs">
-            <span class="text-slate-200 font-medium">${escapeHtml(card.type)}</span>
-            <span class="text-slate-500">•</span>
-            <span class="text-slate-400">${escapeHtml(card.rarity)}</span>
+            <span>${escapeHtml(card.type)}</span>
+            <span class="text-muted">·</span>
+            <span class="text-muted">${escapeHtml(card.rarity)}</span>
           </div>
         </td>
-        <td class="py-2 px-4">
+        <td class="py-2 px-3">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">−</button>
+            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
             <input
               type="number"
               min="0"
               max="999"
               value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
-              class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-slate-900 text-slate-100 border border-slate-700"
+              class="count"
             />
-            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">＋</button>
+            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
           </div>
         </td>
-        <td class="py-2 px-4">
+        <td class="py-2 px-3">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">−</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step foil-badge">−</button>
             <input
               type="number"
               min="0"
               max="999"
               value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
-              class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-slate-900 text-amber-200 border border-amber-500/40 ${foil > 0 ? 'foil-badge' : ''}"
+              class="count text-foil ${foil > 0 ? 'foil-badge' : ''}"
             />
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">＋</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step foil-badge">＋</button>
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
           <div class="inline-flex flex-col items-center gap-1">
-            <span class="text-xs font-bold ${total >= target ? 'text-emerald-400' : 'text-slate-400'}">
+            <span class="text-xs font-bold tabular-nums ${total >= target ? 'text-ink' : 'text-muted'}">
               ${total} / ${target}
             </span>
             <div class="flex items-center gap-1">
@@ -443,8 +443,8 @@ function renderTableRows(cards) {
             </div>
           </div>
         </td>
-        <td class="py-2 px-3 text-right whitespace-nowrap">
-          <button type="button" onclick="openEditModal('${escapeHtml(card.id)}')" class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 cursor-pointer" title="Karte &amp; Bild bearbeiten">
+        <td class="py-2 pl-3 text-right whitespace-nowrap">
+          <button type="button" onclick="openEditModal('${escapeHtml(card.id)}')" class="step" title="Karte &amp; Bild bearbeiten">
             ✎
           </button>
         </td>
@@ -464,8 +464,26 @@ function renderGridCards(cards) {
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
-      <div class="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col justify-between transition ${foil > 0 ? 'foil-active-border' : ''}">
-        <div class="relative w-full card-aspect bg-slate-950 overflow-hidden border-b border-slate-800">
+      <div class="group border-r border-b border-line p-4 flex flex-col gap-3">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h3 class="caps text-[15px] leading-tight truncate" title="${escapeHtml(cardLabel(card))}">
+              ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
+            </h3>
+            <p class="text-xs mt-1 flex items-center gap-1.5"><span class="dot" style="background:${dMeta.bg2}"></span>${escapeHtml(cardDomains(card).join(' / '))}</p>
+            <p class="text-xs text-muted">${escapeHtml(card.number)} · ${escapeHtml(card.type)} · ${escapeHtml(card.rarity)}</p>
+          </div>
+          <button
+            type="button"
+            onclick="openEditModal('${escapeHtml(card.id)}')"
+            class="shrink-0 text-xs text-muted hover:text-ink cursor-pointer"
+            title="Karte &amp; Bild bearbeiten"
+          >
+            ✎
+          </button>
+        </div>
+
+        <div class="relative w-full card-aspect rounded-md overflow-hidden bg-soft ${foil > 0 ? 'foil-active-border' : ''}">
           <img
             src="${escapeHtml(imgUrl)}"
             alt="${escapeHtml(cardLabel(card))}"
@@ -475,78 +493,45 @@ function renderGridCards(cards) {
             class="w-full h-full object-cover cursor-pointer group-hover:scale-103 transition-transform duration-300 ${total === 0 ? 'card-unowned-img' : ''}"
           />
           ${foil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
-
-          <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-black/75 text-slate-100 backdrop-blur-xs">
-              ${escapeHtml(card.number)}
-            </span>
-            <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-black/75 text-slate-100 backdrop-blur-xs">
-              ${dMeta.icon} ${escapeHtml(cardDomains(card).join(' / '))}
-            </span>
-          </div>
-
-          <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-            ${foil > 0
-              ? `<span class="text-xs px-2 py-0.5 rounded-full foil-badge font-bold text-amber-200 bg-black/70 backdrop-blur-xs">✨ ${foil}× Foil</span>`
-              : `<span></span>`
-            }
-            <button
-              type="button"
-              onclick="openEditModal('${escapeHtml(card.id)}')"
-              class="pointer-events-auto text-xs px-2 py-0.5 rounded-md bg-black/75 text-slate-200 hover:bg-black/95 cursor-pointer"
-              title="Karte &amp; Bild bearbeiten"
-            >
-              ✎
-            </button>
-          </div>
         </div>
 
-        <div class="p-3 space-y-2.5 flex-1 flex flex-col justify-between">
-          <div>
-            <h3 class="font-bold text-sm text-slate-100 leading-snug truncate" title="${escapeHtml(cardLabel(card))}">
-              ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
-            </h3>
-            <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(card.type)} • ${escapeHtml(card.rarity)}</p>
+        <div class="mt-auto space-y-1.5">
+          <div class="flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
+            <span class="caps text-xs truncate">${card.specialFinish ? escapeHtml(card.finishes.join(' / ')) : 'Normal'}</span>
+            <div class="flex items-center gap-1">
+              <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
+                onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
+                class="count count-sm"
+              />
+              <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
+            </div>
           </div>
 
-          <div class="space-y-1.5 pt-2 border-t border-slate-800">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-slate-400">${card.specialFinish ? escapeHtml(card.finishes.join(' / ')) : 'Normal'}:</span>
-              <div class="flex items-center gap-1">
-                <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">−</button>
-                <input
-                  type="number"
-                  min="0"
-                  max="999"
-                  value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
-                  onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
-                  class="w-10 h-6 text-center rounded text-xs font-bold bg-slate-950 text-slate-100 border border-slate-700"
-                />
-                <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">＋</button>
-              </div>
+          <div class="flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
+            <span class="caps text-xs text-foil">Foil</span>
+            <div class="flex items-center gap-1">
+              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step foil-badge">−</button>
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
+                onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
+                class="count count-sm text-foil"
+              />
+              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step foil-badge">＋</button>
             </div>
+          </div>
 
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold px-1.5 py-0.5 rounded foil-badge text-amber-200">Foil ✨:</span>
-              <div class="flex items-center gap-1">
-                <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">−</button>
-                <input
-                  type="number"
-                  min="0"
-                  max="999"
-                  value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
-                  onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
-                  class="w-10 h-6 text-center rounded text-xs font-bold bg-slate-950 text-amber-200 border border-amber-500/40"
-                />
-                <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">＋</button>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between pt-1">
-              <span class="text-xs text-slate-400">Besitz: <strong class="text-slate-100">${total} / ${target}</strong></span>
-              <div class="flex items-center gap-1">
-                ${renderPlaysetDots(total, target)}
-              </div>
+          <div class="flex items-center justify-between pt-1 text-xs">
+            <span class="text-muted">Besitz <strong class="text-ink tabular-nums">${total} / ${target}</strong></span>
+            <div class="flex items-center gap-1">
+              ${renderPlaysetDots(total, target)}
             </div>
           </div>
         </div>
@@ -580,11 +565,10 @@ function syncLightboxView(cardId) {
   const foil = card.foil || 0;
   const total = normal + foil;
   const target = getPlaysetTarget(card);
-  const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
 
   document.getElementById('lightboxNumber').textContent = card.number;
   document.getElementById('lightboxName').textContent = cardLabel(card);
-  document.getElementById('lightboxMeta').textContent = `${dMeta.icon} ${cardDomains(card).join(' / ')} • ${card.type} • ${card.rarity}`;
+  document.getElementById('lightboxMeta').textContent = `${cardDomains(card).join(' / ')} • ${card.type} • ${card.rarity}`;
   document.getElementById('lightboxRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
   const sourceLink=document.getElementById('lightboxSource');
   sourceLink.href=card.sourceUrl || 'https://openrift.app';
@@ -740,9 +724,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.ownership = btn.dataset.ownership;
       document.querySelectorAll('.ownership-tab').forEach(b => {
         const active = b.dataset.ownership === state.ownership;
-        b.className = active
-          ? 'ownership-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer transition'
-          : 'ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition';
+        b.setAttribute('aria-pressed', String(active));
       });
       renderListAndGrid();
     });
@@ -753,9 +735,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.domain = btn.dataset.domain;
       document.querySelectorAll('.domain-pill').forEach(b => {
         const active = b.dataset.domain === state.domain;
-        b.className = active
-          ? 'domain-pill px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white cursor-pointer'
-          : 'domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer';
+        b.setAttribute('aria-pressed', String(active));
       });
       renderListAndGrid();
     });
@@ -782,14 +762,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const viewBtnGrid = document.getElementById('viewBtnGrid');
   viewBtnTable.addEventListener('click', () => {
     state.viewMode = 'table';
-    viewBtnTable.className = 'px-2.5 py-1 rounded text-xs font-semibold bg-indigo-600 text-white shadow-sm cursor-pointer';
-    viewBtnGrid.className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-400 hover:text-white cursor-pointer';
+    viewBtnTable.setAttribute('aria-pressed', 'true');
+    viewBtnGrid.setAttribute('aria-pressed', 'false');
     renderListAndGrid();
   });
   viewBtnGrid.addEventListener('click', () => {
     state.viewMode = 'grid';
-    viewBtnGrid.className = 'px-2.5 py-1 rounded text-xs font-semibold bg-indigo-600 text-white shadow-sm cursor-pointer';
-    viewBtnTable.className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-400 hover:text-white cursor-pointer';
+    viewBtnGrid.setAttribute('aria-pressed', 'true');
+    viewBtnTable.setAttribute('aria-pressed', 'false');
     renderListAndGrid();
   });
 
