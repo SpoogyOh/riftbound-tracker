@@ -131,7 +131,7 @@ Before registering:
 
 The connector does not expose hosted Auth configuration updates, so these dashboard settings are documented. Password recovery UI, cloud backup restore and local-to-cloud transfer are follow-ups. Existing backups/custom or unresolved cards must remain intact until a transactional importer can report unsupported entries before writing.
 
-The online UI waits for write confirmation. Button adjustments use the existing atomic RPC with SDK retries explicitly disabled. Absolute edits, paired quick entry and image changes use revision-conditional updates or conflict-detecting first inserts. Old edit dialogs are invalidated after a refresh. After a failed/uncertain write, the controller reads the server state; if that read also fails, editing stays locked. Refresh on tab return or use the reload button; there is no live subscription or offline write queue.
+The online UI waits for write confirmation. Button adjustments and capture additions or undos use the existing atomic RPC with SDK retries explicitly disabled. Absolute edits and image changes use revision-conditional updates or conflict-detecting first inserts. Old edit dialogs are invalidated after a refresh. After a failed/uncertain write, the controller reads the server state; if that read also fails, editing stays locked. Refresh on tab return or use the reload button; there is no live subscription or offline write queue.
 
 ### Hosted test verification
 

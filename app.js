@@ -47,7 +47,7 @@ function generateCardSvgDataUri(card) {
   const d = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
   const tIcon = TYPE_ICON[card.type] || '🃏';
   const safeNumber = String(card.number || 'OGN').replace(/[<>&"']/g, '');
-  const safeName = String(card.name || 'Karte').replace(/[<>&"']/g, '');
+  const safeName = String(card.name || 'Card').replace(/[<>&"']/g, '');
   const safeType = String(card.type || 'Unit').replace(/[<>&"']/g, '');
   const safeRarity = String(card.rarity || 'Common').replace(/[<>&"']/g, '');
 
@@ -306,11 +306,6 @@ function renderStats() {
   document.getElementById('statUniquePercent').textContent = `${uniquePct}%`;
   document.getElementById('statProgressBar').style.width = `${uniquePct}%`;
   document.getElementById('statPlaysets').textContent = playsets.toLocaleString('en-US');
-
-  const dl = document.getElementById('catalogAutocomplete');
-  dl.innerHTML = state.cards
-    .map(c => `<option value="${escapeHtml(c.number)} – ${escapeHtml(cardLabel(c))} | ${escapeHtml(c.id)}"></option>`)
-    .join('');
 }
 
 function renderListAndGrid() {
@@ -546,7 +541,6 @@ function renderAll() {
   for (const id of ['btnOpenAddModal', 'btnEmptyAddCard', 'inputImportJSON']) {
     document.getElementById(id).disabled = onlineMode();
   }
-  document.querySelector('#quickAddForm button[type="submit"]').disabled = !!cloud?.locked;
   document.querySelector('#modalCardForm button[type="submit"]').disabled = !!cloud?.locked;
   document.getElementById('btnCloudRefresh').disabled = !!cloud?.busy;
 }
@@ -619,6 +613,126 @@ function closeCardPanel() {
   document.querySelectorAll('[data-card-id].is-active').forEach(el => el.classList.remove('is-active'));
 }
 
+// Capture: fast entry for a pile of cards. Enter adds one copy in the chosen finish;
+// several matches need an explicit choice, and unknown input never creates a card.
+const CAPTURE_SHOWN = 8;
+const capture = { finish: 'normal', candidates: [], index: -1, log: [], nextId: 1 };
+
+function captureMatches(raw) {
+  const key = raw.trim().toLowerCase();
+  if (!key) return [];
+  const exact = state.cards.filter(c => c.number.toLowerCase() === key || c.name.toLowerCase() === key);
+  return exact.length ? exact : state.cards.filter(c => c.name.toLowerCase().includes(key) || c.number.toLowerCase().includes(key));
+}
+
+function setCaptureMessage(text) {
+  document.getElementById('captureMessage').textContent = text;
+}
+
+function renderCaptureCandidates() {
+  const input = document.getElementById('captureInput');
+  const list = document.getElementById('captureCandidates');
+  const shown = capture.candidates.slice(0, CAPTURE_SHOWN);
+  list.innerHTML = shown.map((card, i) => `
+    <button type="button" id="capture-option-${i}" role="option" aria-selected="${i === capture.index}" data-index="${i}" class="candidate">
+      <img src="${escapeHtml(getCardPrimaryImageUrl(card))}" alt="" loading="lazy" onerror="handleCardImageError(this, '${escapeHtml(card.id)}')" class="w-8 h-11 shrink-0 rounded-sm object-cover bg-soft" />
+      <span class="min-w-0">
+        <span class="caps text-sm block truncate">${escapeHtml(cardLabel(card))}</span>
+        <span class="text-xs block">${escapeHtml(card.number)} · ${card.normal || 0} normal · ${card.foil || 0} foil</span>
+      </span>
+    </button>`).join('');
+  if (input.value.trim() && !capture.candidates.length && !onlineMode()) {
+    list.innerHTML = `<button type="button" data-create class="caps text-xs underline cursor-pointer">Create custom card “${escapeHtml(input.value.trim())}”…</button>`;
+  }
+  if (capture.index >= 0) input.setAttribute('aria-activedescendant', `capture-option-${capture.index}`);
+  else input.removeAttribute('aria-activedescendant');
+}
+
+function updateCaptureCandidates() {
+  const raw = document.getElementById('captureInput').value;
+  capture.candidates = captureMatches(raw);
+  const count = capture.candidates.length;
+  // A single match is the target; several matches wait for an explicit choice.
+  capture.index = count === 1 ? 0 : -1;
+  renderCaptureCandidates();
+  if (!raw.trim()) setCaptureMessage('');
+  else if (!count) setCaptureMessage(onlineMode() ? 'No card in the online catalog matches.' : 'No card found.');
+  else if (count === 1) setCaptureMessage('Enter adds this card.');
+  else setCaptureMessage(`${count} cards match. Choose one with ↑ ↓ or a click.${count > CAPTURE_SHOWN ? ` Showing the first ${CAPTURE_SHOWN}; keep typing.` : ''}`);
+}
+
+function renderCaptureLog() {
+  document.getElementById('captureCount').textContent = capture.log.length;
+  document.getElementById('captureLog').innerHTML = capture.log.map(entry => `
+    <li class="flex items-center justify-between gap-3 py-2">
+      <span class="min-w-0">
+        <span class="caps text-sm block truncate">${escapeHtml(entry.label)}</span>
+        <span class="text-xs">${escapeHtml(entry.number)} · ${entry.finish === 'foil' ? 'Foil' : 'Normal'} +1</span>
+      </span>
+      <button type="button" data-undo="${entry.id}" class="caps text-xs underline cursor-pointer">Undo</button>
+    </li>`).join('');
+}
+
+function setCaptureFinish(finish) {
+  capture.finish = finish;
+  document.getElementById('captureNormal').setAttribute('aria-pressed', String(finish === 'normal'));
+  document.getElementById('captureFoil').setAttribute('aria-pressed', String(finish === 'foil'));
+  document.getElementById('captureInput').focus();
+}
+
+async function addCaptured(card) {
+  const finish = capture.finish;
+  if (cloud?.locked) return setCaptureMessage('Still saving. Try again in a moment.');
+  if (!canCount(card, finish)) return setCaptureMessage(`${cardLabel(card)} has no ${finish} version.`);
+  if ((card[finish] || 0) >= 999) return setCaptureMessage(`${cardLabel(card)} already has 999 ${finish} copies.`);
+  const label = cardLabel(card);
+  // Clear first so the next card can be typed while an online save is pending.
+  document.getElementById('captureInput').value = '';
+  capture.candidates = [];
+  capture.index = -1;
+  renderCaptureCandidates();
+  const ok = await adjustCardCount(card.id, finish, 1);
+  if (ok === false) return setCaptureMessage(`Not confirmed: ${label}. Check the save status and your counts.`);
+  capture.log.unshift({ id: capture.nextId++, cardId: card.id, label, number: card.number, finish });
+  renderCaptureLog();
+  setCaptureMessage(`Added ${label} · ${finish}.`);
+}
+
+async function undoCaptured(entryId) {
+  const entry = capture.log.find(e => e.id === entryId);
+  if (!entry) return;
+  if (cloud?.locked) return setCaptureMessage('Still saving. Try again in a moment.');
+  const card = state.cards.find(c => c.id === entry.cardId);
+  if (card && (card[entry.finish] || 0) > 0) {
+    const ok = await adjustCardCount(entry.cardId, entry.finish, -1);
+    if (ok === false) return setCaptureMessage(`Undo not confirmed: ${entry.label}. Check the save status and your counts.`);
+    setCaptureMessage(`Removed one ${entry.finish} ${entry.label}.`);
+  } else {
+    setCaptureMessage(`${entry.label} has no ${entry.finish} copies left to remove.`);
+  }
+  capture.log = capture.log.filter(e => e !== entry);
+  renderCaptureLog();
+}
+
+function openCapture() {
+  const dialog = document.getElementById('capturePanel');
+  capture.log = [];
+  capture.candidates = [];
+  capture.index = -1;
+  document.getElementById('captureInput').value = '';
+  renderCaptureLog();
+  renderCaptureCandidates();
+  setCaptureMessage('');
+  // The attribute fallback covers environments without <dialog> methods, such as jsdom.
+  if (!dialog.open) dialog.showModal ? dialog.showModal() : dialog.setAttribute('open', '');
+  document.getElementById('captureInput').focus();
+}
+
+function closeCapture() {
+  const dialog = document.getElementById('capturePanel');
+  if (dialog.open) dialog.close ? dialog.close() : dialog.removeAttribute('open');
+}
+
 function openAddModal(prefillName = '') {
   if (onlineMode()) return;
   for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity','modalNormal','modalFoil']) document.getElementById(id).disabled=false;
@@ -673,7 +787,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.RiftboundCloud) {
     cloud = window.RiftboundCloud.start({
       status: setStorageStatus,
-      clear() { liveCatalog = null; state.cards = []; closeModal(); closeCardPanel(); renderAll(); },
+      clear() { liveCatalog = null; state.cards = []; closeModal(); closeCardPanel(); closeCapture(); renderAll(); },
       show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
       async local(isCurrent) { await loadCollection(isCurrent); if (isCurrent()) refreshCatalogControls(); },
       render: renderAll
@@ -697,7 +811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!state.activeCardId || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
     // Menus and the edit dialog handle their own keys while open.
-    if (document.querySelector(':popover-open') || !document.getElementById('cardModal').classList.contains('hidden')) return;
+    if (document.querySelector(':popover-open') || document.getElementById('capturePanel').open || !document.getElementById('cardModal').classList.contains('hidden')) return;
     if (e.key === 'Escape') closeCardPanel();
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -823,73 +937,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnResetFilters').addEventListener('click', resetAllFilters);
   document.getElementById('btnEmptyReset').addEventListener('click', resetAllFilters);
 
-  document.getElementById('quickAddForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    if (cloud?.locked) return;
-    const rawInput = document.getElementById('quickCardInput').value.trim();
-    if (!rawInput) return;
-    const addNormal = Math.max(0, parseInt(document.getElementById('quickNormalDelta').value, 10) || 0);
-    const addFoil = Math.max(0, parseInt(document.getElementById('quickFoilDelta').value, 10) || 0);
-
-    const explicitId=rawInput.includes(' | ') ? rawInput.split(' | ').at(-1) : null;
-    let searchKey = rawInput;
-    if (rawInput.includes('–')) {
-      searchKey = rawInput.split('–')[0].trim();
+  const captureInput = document.getElementById('captureInput');
+  document.getElementById('btnCapture').addEventListener('click', openCapture);
+  document.getElementById('btnCloseCapture').addEventListener('click', closeCapture);
+  document.getElementById('btnCaptureDone').addEventListener('click', closeCapture);
+  document.getElementById('captureNormal').addEventListener('click', () => setCaptureFinish('normal'));
+  document.getElementById('captureFoil').addEventListener('click', () => setCaptureFinish('foil'));
+  captureInput.addEventListener('input', updateCaptureCandidates);
+  captureInput.addEventListener('keydown', e => {
+    const shown = Math.min(capture.candidates.length, CAPTURE_SHOWN);
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && shown) {
+      e.preventDefault();
+      capture.index = e.key === 'ArrowDown' ? (capture.index + 1) % shown : (capture.index <= 0 ? shown - 1 : capture.index - 1);
+      renderCaptureCandidates();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const card = capture.candidates[capture.index];
+      if (card) addCaptured(card);
+      else if (capture.candidates.length > 1) setCaptureMessage(`${capture.candidates.length} cards match. Choose one with ↑ ↓ or a click.`);
     }
-
-    const lowerKey = searchKey.toLowerCase();
-    let matches = explicitId ? state.cards.filter(c=>c.id===explicitId) : state.cards.filter(
-      c => c.number.toLowerCase() === lowerKey || c.name.toLowerCase() === lowerKey
-    );
-    if (!matches.length && !explicitId) matches=state.cards.filter(c=>c.name.toLowerCase().includes(lowerKey) || c.number.toLowerCase().includes(lowerKey));
-    const found = matches.length === 1 ? matches[0] : null;
-
-    const feedbackEl = document.getElementById('quickAddFeedback');
-    feedbackEl.classList.remove('hidden');
-
-    if (matches.length > 1) {
-      feedbackEl.textContent='Mehrere Varianten gefunden. Bitte eine vollständige Variante aus den Vorschlägen auswählen.';
-      return;
+  });
+  document.getElementById('captureCandidates').addEventListener('click', e => {
+    const option = e.target.closest('[data-index]');
+    if (option) { captureInput.focus(); addCaptured(capture.candidates[Number(option.dataset.index)]); return; }
+    if (e.target.closest('[data-create]')) {
+      const name = captureInput.value.trim();
+      closeCapture();
+      openAddModal(name);
     }
-    if (found && ((!canCount(found,'normal') && addNormal) || (!canCount(found,'foil') && addFoil))) {
-      feedbackEl.textContent='Diese Ausführung ist im Katalog für das gewählte Finish nicht verfügbar.';
-      return;
-    }
-    if (onlineMode()) {
-      if (!found) { feedbackEl.textContent = 'Bitte eine Variante aus dem Online-Katalog auswählen. Eigene Karten bleiben lokal.'; return; }
-      // Both finish deltas form one revision-checked edit, so quick entry is all-or-nothing.
-      const ok = await cloud.change(found.id, { normal: Math.min(999, found.normal + addNormal), foil: Math.min(999, found.foil + addFoil) });
-      feedbackEl.textContent = ok ? '✔ Online gebucht.' : 'Nicht bestätigt. Bitte Speicherstatus und aktuellen Bestand prüfen.';
-      return;
-    }
-    if (found) {
-      found.normal = Math.min(999, (found.normal || 0) + addNormal);
-      found.foil = Math.min(999, (found.foil || 0) + addFoil);
-      saveCollection();
-      renderAll();
-      feedbackEl.textContent = `✔ Gebucht: ${found.number} ${found.name} (+${addNormal} Normal, +${addFoil} Foil ✨ → Jetzt: ${found.normal} Normal / ${found.foil} Foil)`;
-    } else {
-      const isCode = /^[A-Z]{3}-\d+/i.test(rawInput);
-      const newNum = isCode ? rawInput.toUpperCase() : `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
-      const newCard = {
-        id: `custom-${crypto.randomUUID()}`,
-        number: newNum,
-        name: rawInput,
-        set: 'OGN',
-        domain: 'Neutral',
-        type: 'Unit',
-        rarity: 'Common',
-        normal: Math.min(999,addNormal),
-        foil: Math.min(999,addFoil)
-      };
-      state.cards.unshift(newCard);
-      saveCollection();
-      renderAll();
-      feedbackEl.textContent = `✨ Neue Karte angelegt & gebucht: "${newCard.name}" (${addNormal} Normal / ${addFoil} Foil)`;
-    }
-
-    document.getElementById('quickCardInput').value = '';
-    document.getElementById('quickCardInput').focus();
+  });
+  document.getElementById('captureLog').addEventListener('click', e => {
+    const undo = e.target.closest('[data-undo]');
+    if (undo) undoCaptured(Number(undo.dataset.undo));
   });
 
   document.getElementById('btnOpenAddModal').addEventListener('click', () => openAddModal());

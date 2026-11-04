@@ -6,7 +6,7 @@ A browser-based collection tracker for Riftbound TCG. Track normal and foil copi
 
 Hosted test environment: <https://riftbound-tracker-test.opiola-daniel.chatgpt.site/>. The owner reported successful login, persisted quantities, shared counts across two browser sessions, concurrent increments, and separate collections for two accounts on 2026-11-02. See the [verification record](docs/database.md#hosted-test-verification) for scope and remaining checks.
 
-Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The user interface is moving from German to English labels section by section; card data is imported in English.
+Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The user interface and card data are in English. CSV export column names and backup file names are still German.
 
 ## Run the app
 
@@ -43,7 +43,7 @@ When setting up another host, configure its app URL and email delivery in Supaba
 - Email/password sign-in, registration with email confirmation, and a private online collection.
 - Separate normal and foil quantities, with buttons and direct number entry.
 - Binder and list views, a card panel that stays open beside the results (arrow keys browse, Esc closes), foil effects, and collection statistics.
-- Quick entry by card name or collector number. Ambiguous matches require an explicit variant selection.
+- Capture mode for a pile of cards: type a collector number or name and press Enter to add one copy in the chosen finish. Ambiguous matches require an explicit variant selection, unknown input never creates a card, and each addition can be undone.
 - Filters for ownership, domains, set, card type, and rarity, plus several sorting options.
 - English card catalog imported from [OpenRift](https://openrift.app/developers).
 - IndexedDB persistence, a labeled localStorage fallback, JSON backup/restore, and CSV export.
@@ -122,7 +122,7 @@ Local mode uses this bundled catalog. Signed-in mode loads the catalog from Supa
 4. `storage.js` saves the snapshot in IndexedDB, or uses the labeled fallback.
 5. `app.js` refreshes the displayed quantities and statistics.
 
-In online mode, `+`/`−` call the atomic database adjustment function. Direct quantity edits, quick entry and image edits check the saved revision so another device's changes cannot be silently overwritten. Reload or return to the tab to fetch newer server data; there is no live subscription or offline write queue.
+In online mode, `+`/`−` and capture call the atomic database adjustment function. Direct quantity edits and image edits check the saved revision so another device's changes cannot be silently overwritten. Reload or return to the tab to fetch newer server data; there is no live subscription or offline write queue.
 
 The shared card catalog answers **which cards exist**. Your browser collection answers **which copies you own**. Personal collection quantities are never uploaded to GitHub or OpenRift. Signed-in changes are stored in the user's private Supabase collection.
 

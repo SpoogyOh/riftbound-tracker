@@ -148,12 +148,33 @@ for (const failRecovery of [false, true]) {
     assert.equal(text('statTotalCopies'),'9');
     assert.equal(text('authAccount'),'bob@example.test');
     assert.equal(text('storageStatus'),status);
-    assert.equal(d.querySelector('#quickAddForm button[type="submit"]').disabled,false);
+    assert.equal(d.querySelector('#modalCardForm button[type="submit"]').disabled,false);
     assert.equal((await w.CollectionStorage.load())[0].normal,5);
     assert.equal(state.rows.get(`${alice}:${sample.id}`).normal,1);
     assert.equal(state.rows.get(`${bob}:${sample.id}`).normal,9);
   });
 }
+
+test('capture adds and undoes one online copy through the atomic adjustment', async t=>{
+  const state=apiFixture(), {d,text,signIn}=await app(t,state);
+  await signIn();
+  await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
+  d.getElementById('btnCapture').click();
+  const input=d.getElementById('captureInput');
+  input.value=sample.number;
+  input.dispatchEvent(new d.defaultView.Event('input'));
+  assert.match(text('captureMessage'),/Enter adds this card/);
+  input.dispatchEvent(new d.defaultView.KeyboardEvent('keydown',{key:'Enter'}));
+  await waitFor(()=>text('captureCount')==='1');
+  assert.equal(text('statTotalCopies'),'1');
+  assert.equal(state.rows.get(`${alice}:${sample.id}`).normal,1);
+  d.querySelector('#captureLog [data-undo]').click();
+  await waitFor(()=>text('captureCount')==='0');
+  assert.equal(text('statTotalCopies'),'0');
+  assert.equal(state.rows.get(`${alice}:${sample.id}`).normal,0);
+  assert.equal(state.calls.filter(c=>c.path.includes('/rpc/')).length,2);
+  assert.equal((await d.defaultView.CollectionStorage.load())[0].normal,5);
+});
 
 test('registration waits for email confirmation and clears the password without creating a local session', async t=>{
   const state=apiFixture(), {d,text}=await app(t,state);

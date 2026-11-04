@@ -39,9 +39,14 @@ test('real catalog initializes; legacy counts, secondary domains, variants and I
   const fresh=await app(factory);
   assert.equal(fresh.window.document.getElementById('statTotalCopies').textContent,'7');
   fresh.window.close();
-  d.getElementById('quickCardInput').value='OGN-001';
-  d.getElementById('quickAddForm').dispatchEvent(new w.Event('submit',{cancelable:true}));
-  assert.match(d.getElementById('quickAddFeedback').textContent,/Mehrere Varianten/);
+  d.getElementById('btnCapture').click();
+  const captureInput=d.getElementById('captureInput');
+  captureInput.value='OGN-001';
+  captureInput.dispatchEvent(new w.Event('input'));
+  captureInput.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter'}));
+  assert.match(d.getElementById('captureMessage').textContent,/cards match/);
+  assert.equal(d.getElementById('captureLog').children.length,0);
+  d.getElementById('btnCaptureDone').click();
   d.getElementById('filterSet').value='SFD';
   d.getElementById('filterSet').dispatchEvent(new w.Event('change'));
   d.querySelector('[data-domain="Order"]').click();

@@ -68,15 +68,34 @@ test('legacy migration, native IndexedDB, JSON round trip and standalone', async
 
 test('variant selection, finish limits, filter reset and CSV',async({page})=>{
   await ready(page);
-  await page.locator('#quickCardInput').fill('OGN-001');
-  await page.locator('#quickAddForm button[type="submit"]').click();
-  await expect(page.locator('#quickAddFeedback')).toContainText('Mehrere Varianten');
-  const choice=await page.locator('#catalogAutocomplete option').evaluateAll(options=>options.find(o=>o.value.startsWith('OGN-001 – Blazing Scorcher | ')).value);
-  await page.locator('#quickCardInput').fill(choice);
-  await page.locator('#quickNormalDelta').fill('2');
-  await page.locator('#quickFoilDelta').fill('1');
-  await page.locator('#quickAddForm button[type="submit"]').click();
+  await page.locator('#btnCapture').click();
+  const input=page.locator('#captureInput');
+  await expect(input).toBeFocused();
+  // Two variants share OGN-001, so Enter alone must not pick one.
+  await input.fill('OGN-001');
+  await input.press('Enter');
+  await expect(page.locator('#captureMessage')).toContainText('2 cards match');
+  await expect(page.locator('#captureLog li')).toHaveCount(0);
+  await page.locator('#captureCandidates [role="option"]').filter({hasText:'Blazing Scorcher'}).filter({hasNotText:'Promo'}).click();
+  await expect(page.locator('#statTotalCopies')).toHaveText('1');
+  await input.fill('Blazing Scorcher');
+  await input.press('ArrowDown');
+  await input.press('Enter');
+  await expect(page.locator('#statTotalCopies')).toHaveText('2');
+  // The promo variant is foil-only.
+  await input.fill('OGN-001');
+  await input.press('ArrowDown');
+  await input.press('ArrowDown');
+  await input.press('Enter');
+  await expect(page.locator('#captureMessage')).toContainText('has no normal version');
+  await page.locator('#captureFoil').click();
+  await input.fill('OGN-001');
+  await input.press('ArrowDown');
+  await input.press('Enter');
   await expect(page.locator('#statTotalCopies')).toHaveText('3');
+  await expect(page.locator('#captureLog li')).toHaveCount(3);
+  await page.locator('#btnCaptureDone').click();
+  await expect(page.locator('#capturePanel')).toBeHidden();
   await page.locator('#filterSet').selectOption('SFD');
   await page.locator('[data-domain="Order"]').click();
   await page.locator('#viewBtnTable').click();
@@ -193,4 +212,34 @@ test('card panel stays beside the binder: arrows browse, counts save, Esc closes
   await page.keyboard.press('Escape');
   await expect(page.locator('#cardPanel')).toBeHidden();
   await expect(page.locator('#gridContainer .is-active')).toHaveCount(0);
+});
+
+test('capture adds one copy per Enter, never creates cards from unknown input, and undoes',async({page})=>{
+  await ready(page);
+  const number=await page.evaluate(()=>{
+    const counts={};
+    for(const c of window.DEFAULT_RIFTBOUND_CARDS) counts[c.number]=(counts[c.number]||0)+1;
+    return window.DEFAULT_RIFTBOUND_CARDS.find(c=>counts[c.number]===1&&c.finishes?.includes('normal')).number;
+  });
+  await page.locator('#btnCapture').click();
+  const input=page.locator('#captureInput');
+  await input.fill('Zzz not a card');
+  await input.press('Enter');
+  await expect(page.locator('#captureMessage')).toContainText('No card found');
+  await expect(page.locator('#statTotalCopies')).toHaveText('0');
+  for (let i=0;i<2;i++) {
+    await input.fill(number);
+    await input.press('Enter');
+    await expect(input).toHaveValue('');
+  }
+  await expect(page.locator('#statTotalCopies')).toHaveText('2');
+  await expect(page.locator('#captureCount')).toHaveText('2');
+  await page.locator('#captureLog [data-undo]').first().click();
+  await expect(page.locator('#statTotalCopies')).toHaveText('1');
+  await expect(page.locator('#captureLog li')).toHaveCount(1);
+  await expect(page.locator('#storageStatus')).toContainText('Saved');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#capturePanel')).toBeHidden();
+  await page.locator('#btnCapture').click();
+  await expect(page.locator('#captureLog li')).toHaveCount(0);
 });
