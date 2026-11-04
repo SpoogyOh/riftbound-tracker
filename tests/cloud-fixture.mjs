@@ -5,6 +5,8 @@ export const alice = '11111111-1111-4111-8111-111111111111';
 export const bob = '22222222-2222-4222-8222-222222222222';
 const bundled = readBundledCatalog(await readFile(new URL('../cards.js', import.meta.url), 'utf8'));
 export const sample = catalogRows(bundled).find(row => row.finishes.includes('normal') && row.finishes.includes('foil'));
+/** Every bundled variant as an active catalog row, for browser tests of the full binder. */
+export const fullCatalog = catalogRows(bundled).map(row => ({ ...row, active: true }));
 export function session(userId = alice) {
   const email = userId === alice ? 'alice@example.test' : 'bob@example.test';
   const user = { id: userId, email, aud: 'authenticated', role: 'authenticated', created_at: new Date().toISOString(),

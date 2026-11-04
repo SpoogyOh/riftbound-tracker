@@ -2,7 +2,7 @@
 
 > Keep It Simple, But Significant
 
-Supabase is the selected backend. Start with a shared catalog and one private collection per user. The frontend framework is independent of this decision. The browser now includes a TypeScript Supabase adapter and email/password login. Local mode uses the bundled catalog and IndexedDB; signed-in mode reads the shared catalog and the private collection from Supabase.
+Supabase is the selected backend. Start with a shared catalog and one private collection per user. The frontend framework is independent of this decision. The browser now includes a TypeScript Supabase adapter and email/password login. The app reads the shared catalog and the private collection from Supabase and shows only a sign-in screen while signed out.
 
 ## Development deployment
 
@@ -43,11 +43,10 @@ npm run catalog:sql
 
 This compiles `scripts/export-supabase-catalog.mts`, parses the two generated JSON assignments in `cards.js` without evaluating JavaScript, validates variant/printing identities and completeness, and writes `.cache/catalog-import.sql`. Apply that SQL through the Supabase SQL Editor, the Supabase connector, or a trusted database connection. Generating the file does not itself contact the database or require credentials.
 
-To refresh from OpenRift first, use the existing cached importer and rebuild the standalone app before generating the database import:
+To refresh from OpenRift first, use the existing cached importer before generating the database import:
 
 ```bash
 npm run catalog:update
-npm run standalone:build
 npm run catalog:sql
 ```
 
@@ -127,7 +126,7 @@ Before registering:
 2. In Auth email settings, configure your SMTP sender for real users. The [default sender](https://supabase.com/docs/guides/auth/auth-smtp) is restricted to organization team addresses and intended for initial testing. Keep email confirmation enabled.
 3. Open the app, create your own account, confirm the email, and sign in. No credentials should be posted to issues or chat. The confirmation link should return to the configured app URL.
 4. Sign in on a second device. Increment the same variant on both; reload and verify both changes remain. Test a stale absolute edit: the app should report a conflict and reload, rather than overwrite.
-5. Use a second real account to verify it starts with its own collection and cannot read or modify the first account's rows through the Data API. Export a backup, reload, sign out and confirm the local browser collection is still intact.
+5. Use a second real account to verify it starts with its own collection and cannot read or modify the first account's rows through the Data API. Export a backup, reload, sign out and confirm the sign-in screen appears.
 
 The connector does not expose hosted Auth configuration updates, so these dashboard settings are documented. Password recovery UI, cloud backup restore and local-to-cloud transfer are follow-ups. Existing backups/custom or unresolved cards must remain intact until a transactional importer can report unsupported entries before writing.
 

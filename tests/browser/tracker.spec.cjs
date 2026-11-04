@@ -1,7 +1,13 @@
 const { test, expect } = require('@playwright/test');
 const { readFile } = require('node:fs/promises');
+const { routeApi, signIn } = require('./online.cjs');
 
+// Each test signs in to a fresh fixture account that serves the full bundled catalog.
+let fixture, api;
 test.beforeEach(async ({ page }) => {
+  fixture = await import('../cloud-fixture.mjs');
+  api = fixture.apiFixture(fixture.fullCatalog);
+  await routeApi(page, api);
   // Keep tests gentle on the community image host: deterministic placeholders,
   // with one explicitly bounded real-image check in a separate test below.
   await page.route('https://openrift.app/media/cards/**', route => route.fulfill({
@@ -10,59 +16,46 @@ test.beforeEach(async ({ page }) => {
   }));
 });
 
-async function ready(page, path = '/') {
-  await page.goto(path);
+async function ready(page) {
+  await page.goto('/');
+  await signIn(page);
   await expect(page.locator('#gridContainer > div')).toHaveCount(1894);
 }
 
-test('legacy migration, native IndexedDB, JSON round trip and standalone', async ({ page }) => {
+test('signed out shows only the sign-in screen; the account collection loads, reloads and exports; old local data stays', async ({ page }) => {
   const errors=[];
   page.on('pageerror', error=>errors.push(error.message));
   await page.addInitScript(()=>{
     if(!localStorage.getItem('browser-test-seeded')) {
-      localStorage.setItem('riftbound_card_tracker_v2',JSON.stringify([
-        {id:'OGN-001',number:'OGN-001',name:'Blazing Scorcher',normal:2,foil:1},
-        {id:'legacy-unknown',number:'OGN-030',name:'Uncertain',normal:3,foil:0}
-      ]));
+      localStorage.setItem('riftbound_card_tracker_v2',JSON.stringify([{id:'OGN-001',number:'OGN-001',name:'Blazing Scorcher',normal:2,foil:1}]));
       localStorage.setItem('browser-test-seeded','1');
     }
   });
+  const card=fixture.fullCatalog.find(c=>c.number==='OGN-001'&&c.finishes.includes('normal'));
+  api.rows.set(`${fixture.alice}:${card.id}`,{...fixture.collectionRow(fixture.alice,card.id,4),foil:1});
   await page.goto('/');
-  await expect(page.locator('#statTotalCopies')).toHaveText('6');
-  await expect(page.locator('#storageStatus')).toContainText('for review');
-  await page.locator('#searchInput').fill('Blazing Scorcher');
-  const row=page.locator('#gridContainer > div').filter({has:page.locator('input[value="2"]')});
-  await expect(row).toHaveCount(1);
-  await row.getByRole('button',{name:'＋',exact:true}).first().click();
-  await expect(page.locator('#storageStatus')).toContainText('Saved · IndexedDB');
+  await expect(page.locator('#signInScreen')).toBeVisible();
+  await expect(page.locator('#gridContainer')).toBeHidden();
+  await expect(page.locator('#btnCapture')).toBeHidden();
+  await signIn(page);
+  await expect(page.locator('#signInScreen')).toBeHidden();
+  // Only the account's five copies count; the three old local copies are not read.
+  await expect(page.locator('#statTotalCopies')).toHaveText('5');
   await page.reload();
-  await expect(page.locator('#statTotalCopies')).toHaveText('7');
-  const record=await page.evaluate(()=>new Promise((resolve,reject)=>{
-    const r=indexedDB.open('riftbound-tracker');
-    r.onerror=()=>reject(r.error);
-    r.onsuccess=()=>{
-      const q=r.result.transaction('collection').objectStore('collection').get('current');
-      q.onsuccess=()=>{r.result.close();resolve(q.result);};
-      q.onerror=()=>reject(q.error);
-    };
-  }));
-  expect(record.schemaVersion).toBe(3);
-  expect(record.items).toHaveLength(2);
-  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('riftbound_card_tracker_v2'))[0].normal)).toBe(2);
+  await expect(page.locator('#storageStatus')).toContainText('Online collection loaded');
+  await expect(page.locator('#statTotalCopies')).toHaveText('5');
   const downloaded=page.waitForEvent('download');
   await page.locator('#btnAccountMenu').click();
   await page.locator('#btnExportJSON').click();
-  const backup=await downloaded;
-  const path=await backup.path();
-  const json=JSON.parse(await readFile(path,'utf8'));
+  const json=JSON.parse(await readFile(await (await downloaded).path(),'utf8'));
   expect(json.schemaVersion).toBe(3);
-  expect(json.items.reduce((n,c)=>n+c.normal+c.foil,0)).toBe(7);
-  page.on('dialog',dialog=>dialog.accept());
-  await page.locator('#inputImportJSON').setInputFiles(path);
-  await expect(page.locator('#storageStatus')).toContainText('Saved · IndexedDB');
-  await expect(page.locator('#statTotalCopies')).toHaveText('7');
-  await page.goto('/riftbound_tracker.html');
-  await expect(page.locator('#statTotalCopies')).toHaveText('7');
+  expect(json.items).toHaveLength(1);
+  expect(json.items[0].normal+json.items[0].foil).toBe(5);
+  await page.locator('#btnAccountMenu').click();
+  await page.locator('#btnSignOut').click();
+  await expect(page.locator('#signInScreen')).toBeVisible();
+  await expect(page.locator('#gridContainer')).toBeHidden();
+  expect(await page.evaluate(()=>localStorage.getItem('riftbound_card_tracker_v2'))).toContain('Blazing Scorcher');
   expect(errors).toEqual([]);
 });
 
@@ -157,11 +150,12 @@ test('header: slash focuses search; account menu opens and closes',async({page})
   await page.keyboard.press('/');
   await expect(page.locator('#searchInput')).toBeFocused();
   await expect(page.locator('#searchInput')).toHaveValue('');
-  await expect(page.locator('#authEmail')).toBeHidden();
+  await expect(page.locator('#btnSignOut')).toBeHidden();
   await page.locator('#btnAccountMenu').click();
-  await expect(page.locator('#authEmail')).toBeVisible();
+  await expect(page.locator('#accountLabel')).toHaveText('alice@example.test');
+  await expect(page.locator('#btnSignOut')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('#authEmail')).toBeHidden();
+  await expect(page.locator('#btnSignOut')).toBeHidden();
 });
 
 test('binder is the default view; filters sit in a sidebar on desktop and a sheet on mobile',async({page})=>{
@@ -214,13 +208,11 @@ test('card panel stays beside the binder: arrows browse, counts save, Esc closes
   await expect(page.locator('#gridContainer .is-active')).toHaveCount(0);
 });
 
-test('capture adds one copy per Enter, never creates cards from unknown input, and undoes',async({page})=>{
+test('capture adds one copy per Enter, ignores unknown input, and undoes',async({page})=>{
   await ready(page);
-  const number=await page.evaluate(()=>{
-    const counts={};
-    for(const c of window.DEFAULT_RIFTBOUND_CARDS) counts[c.number]=(counts[c.number]||0)+1;
-    return window.DEFAULT_RIFTBOUND_CARDS.find(c=>counts[c.number]===1&&c.finishes?.includes('normal')).number;
-  });
+  const counts={};
+  for(const c of fixture.fullCatalog) counts[c.number]=(counts[c.number]||0)+1;
+  const number=fixture.fullCatalog.find(c=>counts[c.number]===1&&c.finishes.includes('normal')).number;
   await page.locator('#btnCapture').click();
   const input=page.locator('#captureInput');
   await input.fill('Zzz not a card');
