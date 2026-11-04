@@ -14,7 +14,8 @@ module.exports = defineConfig({
     screenshot: 'only-on-failure'
   },
   webServer: {
-    command: 'python3 -m http.server 8765 --bind 127.0.0.1',
+    // Test the production build, as it is deployed.
+    command: 'npm run build && npx vite preview',
     url: 'http://127.0.0.1:8765',
     reuseExistingServer: !process.env.CI
   }

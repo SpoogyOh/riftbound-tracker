@@ -1,3 +1,4 @@
+// @ts-nocheck -- untyped interface code; it moves to typed modules in a later step.
 const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
 const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
 
@@ -338,7 +339,7 @@ function renderTableRows(cards) {
             <button
               type="button"
               onclick="openCardPanel('${escapeHtml(card.id)}')"
-              class="relative w-10 h-14 rounded overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
+              class="relative w-10 h-14 rounded-[4px] overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
               title="Enlarge card image"
             >
               <img
@@ -604,7 +605,7 @@ function renderCaptureCandidates() {
   const shown = capture.candidates.slice(0, CAPTURE_SHOWN);
   list.innerHTML = shown.map((card, i) => `
     <button type="button" id="capture-option-${i}" role="option" aria-selected="${i === capture.index}" data-index="${i}" class="candidate">
-      <img src="${escapeHtml(getCardPrimaryImageUrl(card))}" alt="" loading="lazy" onerror="handleCardImageError(this, '${escapeHtml(card.id)}')" class="w-8 h-11 shrink-0 rounded-sm object-cover bg-soft" />
+      <img src="${escapeHtml(getCardPrimaryImageUrl(card))}" alt="" loading="lazy" onerror="handleCardImageError(this, '${escapeHtml(card.id)}')" class="w-8 h-11 shrink-0 rounded-[2px] object-cover bg-soft" />
       <span class="min-w-0">
         <span class="caps text-sm block truncate">${escapeHtml(cardLabel(card))}</span>
         <span class="text-xs block">${escapeHtml(card.number)} · ${card.normal || 0} normal · ${card.foil || 0} foil</span>
