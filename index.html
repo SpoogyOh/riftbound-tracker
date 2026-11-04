@@ -68,6 +68,19 @@
     .panel { background: var(--accent); color: var(--ink); }
     .scrim { background: rgba(0, 0, 0, .4); }
     #accountMenu { position: fixed; inset: auto; margin: 0; }
+    .option { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2rem; padding: 0 .5rem; border-radius: 3px; text-align: left; font-size: .8125rem; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; cursor: pointer; }
+    .option:hover { text-decoration: underline; }
+    .option[aria-pressed="true"] { background: var(--ink); color: var(--paper); text-decoration: none; }
+    /* Filters: a sticky sidebar on desktop, a popover sheet below 1024px. */
+    #filterPanel { margin: 0; border: 0; padding: 0; color: inherit; background: var(--paper); overflow: visible; }
+    @media (min-width: 1024px) {
+      #filterPanel { display: block; position: sticky; inset: auto; top: 5rem; align-self: start; width: auto; height: auto; max-height: calc(100vh - 6rem); overflow-y: auto; padding: 1.25rem 0; }
+    }
+    @media (max-width: 1023.98px) {
+      #filterPanel:popover-open { --muted: rgba(0, 0, 0, .65); inset: 0 auto 0 0; width: min(20rem, 88vw); height: 100%; overflow-y: auto; padding: 1.25rem; background: var(--accent); }
+      #filterPanel:popover-open .option:not([aria-pressed="true"]) { background: transparent; }
+    }
+    #filterPanel::backdrop { background: rgba(0, 0, 0, .4); }
 
     @keyframes foilShimmer {
       0% { background-position: 0% 50%; }
@@ -256,118 +269,116 @@
       <p id="quickAddFeedback" class="text-xs mt-3 hidden"></p>
     </section>
 
-    <!-- Filter Controls -->
-    <section class="border-t border-line pt-5 pb-5 space-y-4">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div class="flex flex-wrap items-center gap-1.5" id="ownershipTabs">
-          <button type="button" data-ownership="all" aria-pressed="true" class="ownership-tab tab">Alle</button>
-          <button type="button" data-ownership="owned" aria-pressed="false" class="ownership-tab tab">Im Besitz</button>
-          <button type="button" data-ownership="foil" aria-pressed="false" class="ownership-tab tab">Nur Foil</button>
-          <button type="button" data-ownership="missing" aria-pressed="false" class="ownership-tab tab">Fehlend (0)</button>
-          <button type="button" data-ownership="incomplete" aria-pressed="false" class="ownership-tab tab">Playset offen (&lt;3)</button>
-          <button type="button" data-ownership="playset" aria-pressed="false" class="ownership-tab tab">Playset voll (3+)</button>
+    <!-- Collection: filters (sidebar on desktop, sheet on smaller screens) and results -->
+    <div class="border-t border-line lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+      <aside id="filterPanel" popover aria-label="Filters" class="space-y-6">
+        <div class="flex items-center justify-between lg:hidden">
+          <p class="caps text-sm">Filters</p>
+          <button type="button" popovertarget="filterPanel" popovertargetaction="hide" aria-label="Close filters" class="caps text-sm cursor-pointer">[×]</button>
         </div>
 
-        <div class="flex items-center gap-1.5 self-start lg:self-auto">
-          <button id="viewBtnTable" type="button" aria-pressed="true" class="tab">Liste</button>
-          <button id="viewBtnGrid" type="button" aria-pressed="false" class="tab">Karten-Grid (Binder)</button>
-        </div>
-      </div>
-
-      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-4 border-t border-line">
-        <div class="flex flex-wrap items-center gap-1.5" id="domainPills">
-          <span class="caps text-xs text-muted mr-1">Domain</span>
-          <button type="button" data-domain="all" aria-pressed="true" class="domain-pill tab">Alle</button>
-          <button type="button" data-domain="Fury" aria-pressed="false" class="domain-pill tab"><span class="dot" style="background:#dc2626"></span>Fury</button>
-          <button type="button" data-domain="Calm" aria-pressed="false" class="domain-pill tab"><span class="dot" style="background:#10b981"></span>Calm</button>
-          <button type="button" data-domain="Mind" aria-pressed="false" class="domain-pill tab"><span class="dot" style="background:#3b82f6"></span>Mind</button>
-          <button type="button" data-domain="Body" aria-pressed="false" class="domain-pill tab"><span class="dot" style="background:#f59e0b"></span>Body</button>
-          <button type="button" data-domain="Chaos" aria-pressed="false" class="domain-pill tab"><span class="dot" style="background:#9333ea"></span>Chaos</button>
-          <button type="button" data-domain="Order" aria-pressed="false" class="domain-pill tab"><span class="dot" style="background:#ea580c"></span>Order</button>
-          <button type="button" data-domain="Neutral" aria-pressed="false" class="domain-pill tab"><span class="dot" style="background:#475569"></span>Neutral</button>
+        <div>
+          <p class="caps text-xs text-muted mb-2">Ownership</p>
+          <div class="flex flex-col gap-0.5" id="ownershipTabs">
+            <button type="button" data-ownership="all" aria-pressed="true" class="ownership-tab option">All</button>
+            <button type="button" data-ownership="owned" aria-pressed="false" class="ownership-tab option">Owned</button>
+            <button type="button" data-ownership="foil" aria-pressed="false" class="ownership-tab option">Foil</button>
+            <button type="button" data-ownership="missing" aria-pressed="false" class="ownership-tab option">Missing</button>
+            <button type="button" data-ownership="incomplete" aria-pressed="false" class="ownership-tab option">Incomplete playset</button>
+            <button type="button" data-ownership="playset" aria-pressed="false" class="ownership-tab option">Complete playset</button>
+          </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <select id="filterSet" class="box">
-            <option value="all">Alle Sets</option>
-            <option value="OGN">Origins (OGN)</option>
-            <option value="OGS">Proving Grounds (OGS)</option>
-            <option value="SPF">Spiritforged (SPF)</option>
-            <option value="PRM">Promo / Custom (PRM)</option>
-          </select>
-
-          <select id="filterType" class="box">
-            <option value="all">Alle Kartentypen</option>
-            <option value="Legend">Legend</option>
-            <option value="Champion">Champion</option>
-            <option value="Unit">Unit</option>
-            <option value="Spell">Spell</option>
-            <option value="Signature Spell">Signature Spell</option>
-            <option value="Gear">Gear</option>
-            <option value="Battlefield">Battlefield</option>
-            <option value="Rune">Rune</option>
-          </select>
-
-          <select id="filterRarity" class="box">
-            <option value="all">Alle Seltenheiten</option>
-            <option value="Common">Common</option>
-            <option value="Uncommon">Uncommon</option>
-            <option value="Rare">Rare</option>
-            <option value="Epic">Epic</option>
-            <option value="Showcase">Showcase / Alt-Art</option>
-          </select>
-
-          <select id="sortSelect" class="box">
-            <option value="number">Sortierung: Kartennummer</option>
-            <option value="name">Sortierung: Name (A–Z)</option>
-            <option value="total_desc">Sortierung: Meiste Kopien</option>
-            <option value="foil_desc">Sortierung: Meiste Foils</option>
-            <option value="domain">Sortierung: Domain</option>
-            <option value="rarity">Sortierung: Seltenheit</option>
-          </select>
+        <div>
+          <p class="caps text-xs text-muted mb-2">Domain</p>
+          <div class="flex flex-col gap-0.5" id="domainPills">
+            <button type="button" data-domain="all" aria-pressed="true" class="domain-pill option">All</button>
+            <button type="button" data-domain="Fury" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#dc2626"></span>Fury</button>
+            <button type="button" data-domain="Calm" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#10b981"></span>Calm</button>
+            <button type="button" data-domain="Mind" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#3b82f6"></span>Mind</button>
+            <button type="button" data-domain="Body" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#f59e0b"></span>Body</button>
+            <button type="button" data-domain="Chaos" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#9333ea"></span>Chaos</button>
+            <button type="button" data-domain="Order" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#ea580c"></span>Order</button>
+            <button type="button" data-domain="Neutral" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#475569"></span>Neutral</button>
+          </div>
         </div>
-      </div>
-    </section>
 
-    <div class="flex items-center justify-between py-3">
-      <p id="resultsCounter" class="text-xs text-muted">Zeige 0 Karten • Klicke auf ein Kartenbild für die Großansicht</p>
-      <button id="btnResetFilters" type="button" class="hidden caps text-xs underline cursor-pointer">
-        Filter zurücksetzen
-      </button>
-    </div>
+        <div class="space-y-3">
+          <label class="block">
+            <span class="caps text-xs text-muted">Set</span>
+            <select id="filterSet" class="box w-full mt-1">
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="caps text-xs text-muted">Type</span>
+            <select id="filterType" class="box w-full mt-1">
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="caps text-xs text-muted">Rarity</span>
+            <select id="filterRarity" class="box w-full mt-1">
+              <option value="all">All</option>
+            </select>
+          </label>
+        </div>
 
-    <!-- TABLE VIEW -->
-    <section id="tableContainer" class="border-t border-ink">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b border-line caps text-xs">
-              <th class="py-3 pr-3">Karte &amp; Nr.</th>
-              <th class="py-3 px-3">Domain</th>
-              <th class="py-3 px-3">Typ &amp; Seltenheit</th>
-              <th class="py-3 px-3 text-center">Normal / Sonderfinish</th>
-              <th class="py-3 px-3 text-center">Foil Kopien</th>
-              <th class="py-3 px-3 text-center">Gesamt / Playset</th>
-              <th class="py-3 pl-3 text-right">Aktion</th>
-            </tr>
-          </thead>
-          <tbody id="cardTableBody" class="divide-y divide-line text-sm"></tbody>
-        </table>
-      </div>
-    </section>
+      </aside>
 
-    <!-- GRID VIEW (Binder Look) -->
-    <section id="gridContainer" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 border-t border-l border-line"></section>
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div class="flex items-center gap-3">
+            <div class="lg:hidden"><button id="btnOpenFilters" type="button" popovertarget="filterPanel" class="btn">Filters <span id="filterCount"></span></button></div>
+            <p id="resultsCounter" class="text-xs text-muted tabular-nums">0 cards</p>
+            <button id="btnResetFilters" type="button" class="hidden caps text-xs underline cursor-pointer">Reset filters</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="sortSelect" aria-label="Sort cards" class="box">
+              <option value="number">Sort: Number</option>
+              <option value="name">Sort: Name (A–Z)</option>
+              <option value="total_desc">Sort: Most copies</option>
+              <option value="foil_desc">Sort: Most foils</option>
+              <option value="domain">Sort: Domain</option>
+              <option value="rarity">Sort: Rarity</option>
+            </select>
+            <button id="viewBtnGrid" type="button" aria-pressed="true" class="tab">Binder</button>
+            <button id="viewBtnTable" type="button" aria-pressed="false" class="tab">List</button>
+          </div>
+        </div>
 
-    <!-- Empty State -->
-    <div id="emptyState" class="hidden border-t border-line py-16 text-center space-y-3">
-      <p class="headline text-3xl leading-[0.9]">Keine Karten für diesen Filter gefunden</p>
-      <p class="text-sm text-muted">
-        Du kannst die Filter zurücksetzen oder eine neue Karte direkt zu deinem Katalog hinzufügen.
-      </p>
-      <div class="flex justify-center gap-2 pt-2">
-        <button id="btnEmptyReset" type="button" class="btn">Filter zurücksetzen</button>
-        <button id="btnEmptyAddCard" type="button" class="btn btn-primary">Neue Karte anlegen →</button>
+        <!-- GRID VIEW (Binder Look) -->
+        <section id="gridContainer" aria-label="Binder" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 border-t border-l border-line"></section>
+
+        <!-- TABLE VIEW -->
+        <section id="tableContainer" aria-label="List" class="hidden border-t border-ink">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-line caps text-xs">
+                  <th class="py-3 pr-3">Card</th>
+                  <th class="py-3 px-3">Domain</th>
+                  <th class="py-3 px-3">Type &amp; rarity</th>
+                  <th class="py-3 px-3 text-center">Normal / special</th>
+                  <th class="py-3 px-3 text-center">Foil</th>
+                  <th class="py-3 px-3 text-center">Total / playset</th>
+                  <th class="py-3 pl-3 text-right"><span class="sr-only">Edit</span></th>
+                </tr>
+              </thead>
+              <tbody id="cardTableBody" class="divide-y divide-line text-sm"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden border-t border-line py-16 text-center space-y-3">
+          <p class="headline text-3xl leading-[0.9]">No cards match these filters</p>
+          <p class="text-sm text-muted">Reset the filters, or add a custom card in local mode.</p>
+          <div class="flex justify-center gap-2 pt-2">
+            <button id="btnEmptyReset" type="button" class="btn">Reset filters</button>
+            <button id="btnEmptyAddCard" type="button" class="btn btn-primary">New custom card →</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -413,9 +424,9 @@
         <div class="flex flex-col items-center gap-2">
           <span class="caps text-xs text-foil">Foil Kopien</span>
           <div class="flex items-center gap-1.5">
-            <button id="lbFoilMinus" type="button" class="step foil-badge">−</button>
+            <button id="lbFoilMinus" type="button" class="step text-foil">−</button>
             <span id="lbFoilVal" class="w-8 text-center text-sm font-bold text-foil tabular-nums">0</span>
-            <button id="lbFoilPlus" type="button" class="step foil-badge">＋</button>
+            <button id="lbFoilPlus" type="button" class="step text-foil">＋</button>
           </div>
         </div>
       </div>

@@ -39,7 +39,7 @@ const state = {
   type: 'all',
   rarity: 'all',
   sort: 'number',
-  viewMode: 'table',
+  viewMode: 'grid',
   activeLightboxCardId: null
 };
 
@@ -149,7 +149,7 @@ function saveCollection() {
 }
 function cardDomains(card) { return card.domains?.length ? card.domains : [card.domain || 'Neutral']; }
 function cardLabel(card) {
-  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Vorschau]' : '') + (card.migrationReview ? ' [Zuordnung prüfen]' : '') + (card.active === false ? ' [Archiviert]' : '');
+  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.migrationReview ? ' [Review match]' : '') + (card.active === false ? ' [Archived]' : '');
 }
 function canCount(card, field) {
   if (cloud?.locked) return false;
@@ -165,7 +165,7 @@ function refreshCatalogControls() {
     ['modalRarity', [...new Set(state.cards.map(c=>c.rarity))]]
   ]) {
     const el=document.getElementById(id), selected=el.value;
-    el.innerHTML=(id.startsWith('filter') ? '<option value="all">Alle</option>' : '') + values.sort().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    el.innerHTML=(id.startsWith('filter') ? '<option value="all">All</option>' : '') + values.sort().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
     if ([...el.options].some(o=>o.value===selected)) el.value=selected;
   }
   const meta=window.OPENRIFT_CATALOG_META;
@@ -317,15 +317,12 @@ function renderListAndGrid() {
   const filtered = getFilteredCards();
   const totalCatalog = state.cards.length;
   document.getElementById('resultsCounter').textContent =
-    `Zeige ${filtered.length} von ${totalCatalog} Karten • Klicke auf ein Kartenbild für die Großansicht`;
+    `${filtered.length.toLocaleString('en-US')} of ${totalCatalog.toLocaleString('en-US')} cards`;
 
-  const hasFilters =
-    state.search !== '' ||
-    state.ownership !== 'all' ||
-    state.domain !== 'all' ||
-    state.set !== 'all' ||
-    state.type !== 'all' ||
-    state.rarity !== 'all';
+  const activeFilters = ['ownership', 'domain', 'set', 'type', 'rarity'].filter(key => state[key] !== 'all').length;
+  const hasFilters = state.search !== '' || activeFilters > 0;
+  // The sidebar is hidden below 1024px, so the Filters button shows how many apply.
+  document.getElementById('filterCount').textContent = activeFilters ? `[${activeFilters}]` : '';
 
   document.getElementById('btnResetFilters').classList.toggle('hidden', !hasFilters);
   document.getElementById('btnClearSearch').classList.toggle('hidden', state.search === '');
@@ -372,7 +369,7 @@ function renderTableRows(cards) {
               type="button"
               onclick="openLightbox('${escapeHtml(card.id)}')"
               class="relative w-10 h-14 rounded overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
-              title="Kartenbild vergrößern"
+              title="Enlarge card image"
             >
               <img
                 src="${escapeHtml(imgUrl)}"
@@ -421,7 +418,7 @@ function renderTableRows(cards) {
         </td>
         <td class="py-2 px-3">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step foil-badge">−</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
             <input
               type="number"
               min="0"
@@ -430,7 +427,7 @@ function renderTableRows(cards) {
               onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
               class="count text-foil ${foil > 0 ? 'foil-badge' : ''}"
             />
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step foil-badge">＋</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
@@ -444,7 +441,7 @@ function renderTableRows(cards) {
           </div>
         </td>
         <td class="py-2 pl-3 text-right whitespace-nowrap">
-          <button type="button" onclick="openEditModal('${escapeHtml(card.id)}')" class="step" title="Karte &amp; Bild bearbeiten">
+          <button type="button" onclick="openEditModal('${escapeHtml(card.id)}')" class="step" title="Edit card &amp; image">
             ✎
           </button>
         </td>
@@ -477,7 +474,7 @@ function renderGridCards(cards) {
             type="button"
             onclick="openEditModal('${escapeHtml(card.id)}')"
             class="shrink-0 text-xs text-muted hover:text-ink cursor-pointer"
-            title="Karte &amp; Bild bearbeiten"
+            title="Edit card &amp; image"
           >
             ✎
           </button>
@@ -515,21 +512,21 @@ function renderGridCards(cards) {
           <div class="flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
             <span class="caps text-xs text-foil">Foil</span>
             <div class="flex items-center gap-1">
-              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step foil-badge">−</button>
+              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
               <input
                 type="number"
                 min="0"
                 max="999"
                 value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
                 onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
-                class="count count-sm text-foil"
+                class="count count-sm text-foil ${foil > 0 ? 'foil-badge' : ''}"
               />
-              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step foil-badge">＋</button>
+              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
             </div>
           </div>
 
           <div class="flex items-center justify-between pt-1 text-xs">
-            <span class="text-muted">Besitz <strong class="text-ink tabular-nums">${total} / ${target}</strong></span>
+            <span class="text-muted">Owned <strong class="text-ink tabular-nums">${total} / ${target}</strong></span>
             <div class="flex items-center gap-1">
               ${renderPlaysetDots(total, target)}
             </div>
@@ -784,8 +781,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('filterSet').value = 'all';
     document.getElementById('filterType').value = 'all';
     document.getElementById('filterRarity').value = 'all';
-    document.querySelector('[data-ownership="all"]').click();
-    document.querySelector('[data-domain="all"]').click();
+    // Update the pressed states directly so the reset renders once, not three times.
+    document.querySelectorAll('.ownership-tab').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ownership === 'all')));
+    document.querySelectorAll('.domain-pill').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.domain === 'all')));
     renderListAndGrid();
   }
   document.getElementById('btnResetFilters').addEventListener('click', resetAllFilters);

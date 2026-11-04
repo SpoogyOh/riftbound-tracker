@@ -20,7 +20,7 @@ async function app(factory,legacy) {
   if(legacy)w.localStorage.setItem('riftbound_card_tracker_v2',JSON.stringify(legacy));
   sources.forEach(source=>w.eval(source));
   w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
-  await waitFor(()=>w.document.getElementById('cardTableBody').children.length>1000);
+  await waitFor(()=>w.document.getElementById('gridContainer').children.length>1000);
   return dom;
 }
 test('real catalog initializes; legacy counts, secondary domains, variants and IDB reload work',async()=>{

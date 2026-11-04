@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
 
 async function ready(page, path = '/') {
   await page.goto(path);
-  await expect(page.locator('#cardTableBody tr')).toHaveCount(1894);
+  await expect(page.locator('#gridContainer > div')).toHaveCount(1894);
 }
 
 test('legacy migration, native IndexedDB, JSON round trip and standalone', async ({ page }) => {
@@ -31,7 +31,7 @@ test('legacy migration, native IndexedDB, JSON round trip and standalone', async
   await expect(page.locator('#statTotalCopies')).toHaveText('6');
   await expect(page.locator('#storageStatus')).toContainText('for review');
   await page.locator('#searchInput').fill('Blazing Scorcher');
-  const row=page.locator('#cardTableBody tr').filter({has:page.locator('input[value="2"]')});
+  const row=page.locator('#gridContainer > div').filter({has:page.locator('input[value="2"]')});
   await expect(row).toHaveCount(1);
   await row.getByRole('button',{name:'＋',exact:true}).first().click();
   await expect(page.locator('#storageStatus')).toContainText('Saved · IndexedDB');
@@ -79,6 +79,7 @@ test('variant selection, finish limits, filter reset and CSV',async({page})=>{
   await expect(page.locator('#statTotalCopies')).toHaveText('3');
   await page.locator('#filterSet').selectOption('SFD');
   await page.locator('[data-domain="Order"]').click();
+  await page.locator('#viewBtnTable').click();
   const rows=page.locator('#cardTableBody tr');
   expect(await rows.count()).toBeGreaterThan(0);
   const domains=await rows.locator('td:nth-child(2)').allTextContents();
@@ -99,9 +100,10 @@ test('variant selection, finish limits, filter reset and CSV',async({page})=>{
 
 test('desktop and mobile grid, lightbox and custom image reset',async({page},testInfo)=>{
   await ready(page);
+  await page.locator('#viewBtnTable').click();
   await page.locator('#searchInput').fill('Blazing Scorcher');
   const standard=page.locator('#cardTableBody tr').filter({hasText:'Blazing Scorcher ↗'}).filter({hasNotText:'[Promo]'});
-  await standard.locator('button[title="Karte & Bild bearbeiten"]').click();
+  await standard.locator('button[title="Edit card & image"]').click();
   await page.locator('#modalImageUrl').fill('');
   await page.locator('#modalCardForm button[type="submit"]').click();
   await page.locator('#viewBtnGrid').click();
@@ -124,7 +126,7 @@ test('desktop and mobile grid, lightbox and custom image reset',async({page},tes
 
 test('one real OpenRift image responds with image data',async({page,request})=>{
   await ready(page);
-  const url=await page.locator('#cardTableBody img').first().getAttribute('src');
+  const url=await page.locator('#gridContainer img').first().getAttribute('src');
   const response=await request.get(url,{timeout:30000});
   expect(response.ok()).toBe(true);
   expect(response.headers()['content-type']).toMatch(/^image\//);
@@ -141,4 +143,23 @@ test('header: slash focuses search; account menu opens and closes',async({page})
   await expect(page.locator('#authEmail')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('#authEmail')).toBeHidden();
+});
+
+test('binder is the default view; filters sit in a sidebar on desktop and a sheet on mobile',async({page})=>{
+  await ready(page);
+  await expect(page.locator('#viewBtnGrid')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('#tableContainer')).toBeHidden();
+  await expect(page.locator('[data-domain="Fury"]')).toBeVisible();
+  await expect(page.locator('#btnOpenFilters')).toBeHidden();
+  await page.setViewportSize({width:390,height:844});
+  await expect(page.locator('[data-domain="Fury"]')).toBeHidden();
+  await page.locator('#btnOpenFilters').click();
+  await page.locator('[data-domain="Fury"]').click();
+  await expect(page.locator('[data-domain="Fury"]')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('#filterCount')).toHaveText('[1]');
+  const tiles=page.locator('#gridContainer > div');
+  expect(await tiles.count()).toBeLessThan(1894);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-domain="Fury"]')).toBeHidden();
+  await expect(tiles.first()).toContainText('Fury');
 });

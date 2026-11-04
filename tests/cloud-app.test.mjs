@@ -36,7 +36,7 @@ test('real SDK login, online increment, lost response recovery and logout preser
   assert.equal(text('statTotalCopies'),'5');
   await signIn();
   await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
-  assert.equal(d.querySelectorAll('#cardTableBody tr').length,1);
+  assert.equal(d.querySelectorAll('#gridContainer > div').length,1);
   assert.equal(text('statTotalCopies'),'0');
   assert.equal(d.getElementById('inputImportJSON').disabled,true);
   await w.adjustCardCount(sample.id,'normal',1);

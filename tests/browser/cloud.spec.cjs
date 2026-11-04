@@ -26,20 +26,20 @@ test('two browser sessions share confirmed counts; conflicts and logout preserve
     await page.locator('#authPassword').fill('example-password');
     await page.locator('#btnSignIn').click();
     await expect(page.locator('#storageStatus')).toContainText('Online collection loaded');
-    await expect(page.locator('#cardTableBody tr')).toHaveCount(1);
+    await expect(page.locator('#gridContainer > div')).toHaveCount(1);
     await expect(page.locator('#accountLabel')).toHaveText('alice@example.test');
     await page.keyboard.press('Escape');
     return page;
   }
   try {
     const first=await device(), second=await device();
-    await first.locator('#cardTableBody button').filter({hasText:'＋'}).first().click();
+    await first.locator('#gridContainer button').filter({hasText:'＋'}).first().click();
     await expect(first.locator('#statTotalCopies')).toHaveText('1');
-    await second.locator('#cardTableBody button').filter({hasText:'＋'}).first().click();
+    await second.locator('#gridContainer button').filter({hasText:'＋'}).first().click();
     await expect(second.locator('#statTotalCopies')).toHaveText('2');
     // The first device still has revision 1, so its absolute edit must be rejected.
-    await first.locator('#cardTableBody input').first().fill('7');
-    await first.locator('#cardTableBody input').first().press('Tab');
+    await first.locator('#gridContainer input').first().fill('7');
+    await first.locator('#gridContainer input').first().press('Tab');
     await expect(first.locator('#storageStatus')).toContainText('Loaded the current server state');
     await expect(first.locator('#statTotalCopies')).toHaveText('2');
     await expect(first.locator('#inputImportJSON')).toBeDisabled();
