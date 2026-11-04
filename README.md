@@ -6,7 +6,7 @@ A browser-based collection tracker for Riftbound TCG. Track normal and foil copi
 
 Hosted test environment: <https://riftbound-tracker-test.opiola-daniel.chatgpt.site/>. The owner reported successful login, persisted quantities, shared counts across two browser sessions, concurrent increments, and separate collections for two accounts on 2026-11-02. See the [verification record](docs/database.md#hosted-test-verification) for scope and remaining checks.
 
-Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The existing user interface uses German labels; card data is imported in English.
+Repository documentation and development communication use English. See [AGENTS.md](AGENTS.md) for the repository conventions. The user interface and card data are in English. CSV export column names and backup file names are still German.
 
 ## Run the app
 
@@ -20,17 +20,17 @@ cd riftbound-tracker
 python3 -m http.server 8765 --bind 127.0.0.1
 ```
 
-Open <http://127.0.0.1:8765>. Node.js and npm are needed for development commands and catalog updates, not to run the bundled app. Styling uses Tailwind's CDN script; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
+Open <http://127.0.0.1:8765>. Node.js and npm are needed for development commands and catalog updates, not to run the bundled app. Styling uses Tailwind's CDN script and the self-hosted Archivo font in `fonts/`; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
 
 Browser storage belongs to the browser profile and origin. Export a JSON backup before moving between a local file, a local server, or another domain. Without signing in, the collection stays in that browser. Sign in to use your private Supabase collection from multiple devices. Local and online collections are separate; signing in never uploads or replaces your existing local records.
 
 ## Use the online collection
 
 1. Open the hosted test environment linked above, or serve the app over HTTP locally. The `file:` standalone mode stays local.
-2. Use **Konto erstellen** to register, confirm your email, then sign in. An existing Supabase Auth account can sign in directly. Passwords are handled by Supabase Auth; the app does not store a separate password.
+2. Open the account menu (**Sign in**, top right) and use **Create account** to register, confirm your email, then sign in. An existing Supabase Auth account can sign in directly. Passwords are handled by Supabase Auth; the app does not store a separate password.
 3. Signed-in mode loads the online catalog and collection. All variants are paginated, so the default 1,000-row API cap does not truncate the catalog. Owned archived variants remain available.
-4. Add copies or edit counts. **Gespeichert · Supabase** confirms a server response. If a response is lost or an edit conflicts, the app reads the current server state and asks you to check it. It never repeats an uncertain increment automatically.
-5. **Online neu laden** fetches changes from another device. Signing out restores the separate local collection.
+4. Add copies or edit counts. **Saved · Supabase** in the header confirms a server response. If a response is lost or an edit conflicts, the app reads the current server state and asks you to check it. It never repeats an uncertain increment automatically.
+5. **Reload from server** in the account menu fetches changes from another device. Signing out restores the separate local collection.
 
 The current project URL and publishable browser key are configured in `src/cloud.ts`; both are public configuration. There is no service-role/secret key in the client. RLS restricts collection rows to their owner.
 
@@ -42,8 +42,8 @@ When setting up another host, configure its app URL and email delivery in Supaba
 
 - Email/password sign-in, registration with email confirmation, and a private online collection.
 - Separate normal and foil quantities, with buttons and direct number entry.
-- Table and binder views, card-image lightbox, foil effects, and collection statistics.
-- Quick entry by card name or collector number. Ambiguous matches require an explicit variant selection.
+- Binder and list views, a card panel that stays open beside the results (arrow keys browse, Esc closes), foil effects, and collection statistics.
+- Capture mode for a pile of cards: type a collector number or name and press Enter to add one copy in the chosen finish. Ambiguous matches require an explicit variant selection, unknown input never creates a card, and each addition can be undone.
 - Filters for ownership, domains, set, card type, and rarity, plus several sorting options.
 - English card catalog imported from [OpenRift](https://openrift.app/developers).
 - IndexedDB persistence, a labeled localStorage fallback, JSON backup/restore, and CSV export.
@@ -57,7 +57,8 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | File or directory | Responsibility | When to change it |
 | --- | --- | --- |
 | `README.md` | Project overview, setup instructions, repository map, and data-flow guide. | Explain how to use or develop the project. |
-| `index.html` | Main page structure: buttons, forms, table, grid, dialogs, and custom CSS. Loads the shared JavaScript files. | Change the interface layout or add a control. |
+| `index.html` | Main page structure: buttons, forms, table, grid, dialogs, and custom CSS. Design tokens (colors, type, control styles) live in its `<style>` block. Loads the shared JavaScript files. | Change the interface layout, look, or add a control. |
+| `fonts/` | Self-hosted Archivo variable font (SIL Open Font License, see `OFL.txt`). The standalone build embeds it. | Replace or update the interface font. |
 | `src/cloud.ts` | TypeScript login/session controller and account-bound Supabase clients. | Change authentication and online state transitions. |
 | `src/cloud-repository.ts` | Typed paginated catalog reads, private collection reads, atomic adjustments, and revision-checked edits. | Change online data access. |
 | `cloud.js` | Generated browser bundle including the pinned Supabase SDK. | Regenerate with `npm run build:browser`; edit `src/` instead. |
@@ -121,7 +122,7 @@ Local mode uses this bundled catalog. Signed-in mode loads the catalog from Supa
 4. `storage.js` saves the snapshot in IndexedDB, or uses the labeled fallback.
 5. `app.js` refreshes the displayed quantities and statistics.
 
-In online mode, `+`/`−` call the atomic database adjustment function. Direct quantity edits, quick entry and image edits check the saved revision so another device's changes cannot be silently overwritten. Reload or return to the tab to fetch newer server data; there is no live subscription or offline write queue.
+In online mode, `+`/`−` and capture call the atomic database adjustment function. Direct quantity edits and image edits check the saved revision so another device's changes cannot be silently overwritten. Reload or return to the tab to fetch newer server data; there is no live subscription or offline write queue.
 
 The shared card catalog answers **which cards exist**. Your browser collection answers **which copies you own**. Personal collection quantities are never uploaded to GitHub or OpenRift. Signed-in changes are stored in the user's private Supabase collection.
 

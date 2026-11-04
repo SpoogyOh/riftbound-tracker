@@ -58,6 +58,7 @@ class CloudController {
     // Clear old account data immediately, including while the next request is pending.
     this.bridge.clear();
     element('authAccount').textContent = session?.user.email ?? '';
+    element('accountLabel').textContent = session?.user.email ?? 'Sign in';
     element('authForm').hidden = !!session;
     element('authSignedIn').hidden = !session;
     setTimeout(() => {
@@ -77,25 +78,25 @@ class CloudController {
     if (generation !== this.generation) return;
     this.mode = 'local'; this.ready = true;
     this.bridge.render();
-    this.message('Lokale Sammlung · nur in diesem Browser gespeichert.');
+    this.message('Local collection · saved only in this browser.');
   }
 
   async refresh(): Promise<void> {
     const repository = this.repository, generation = this.generation;
     if (!repository || this.busy) return;
     this.busy = true; this.ready = false; this.bridge.render();
-    this.bridge.status('Online-Sammlung wird geladen …');
+    this.bridge.status('Loading online collection…');
     try {
       const cards = await repository.load();
       if (generation !== this.generation) return;
       this.catalog = repository.catalog;
       this.bridge.show(cards, repository.catalog);
       this.ready = true;
-      this.bridge.status('Online-Sammlung geladen · Supabase');
-      this.message('Online-Sammlung · Änderungen werden direkt gespeichert. Lokale Bestände bleiben separat erhalten; eigene Karten und Backup-Import bleiben lokal.');
+      this.bridge.status('Online collection loaded · Supabase');
+      this.message('Online collection · changes save immediately. Your local collection stays separate; custom cards and backup restore remain local.');
     } catch {
       if (generation !== this.generation) return;
-      this.bridge.status('Online-Sammlung konnte nicht geladen werden. Bearbeiten ist gesperrt. Bitte erneut laden oder abmelden.', true);
+      this.bridge.status('Couldn’t load the online collection. Editing is locked. Reload or sign out.', true);
     } finally {
       if (generation === this.generation) { this.busy = false; this.bridge.render(); }
     }
@@ -106,17 +107,17 @@ class CloudController {
   async change(id: string, edit: Partial<Edit> | { finish: 'normal' | 'foil'; delta: number }, token?: string): Promise<boolean> {
     if (this.mode !== 'cloud' || this.locked || !this.repository) return false;
     if (token !== undefined && token !== this.editToken(id)) {
-      this.bridge.status('Der Bestand wurde inzwischen neu geladen. Bitte den Dialog schließen und die aktuellen Werte erneut bearbeiten.', true);
+      this.bridge.status('The collection was reloaded in the meantime. Close the dialog and edit the current values again.', true);
       return false;
     }
     const repository = this.repository, generation = this.generation;
-    this.busy = true; this.bridge.render(); this.bridge.status('Wird online gespeichert …');
+    this.busy = true; this.bridge.render(); this.bridge.status('Saving online…');
     try {
       if ('finish' in edit) await repository.adjust(id, edit.finish, edit.delta);
       else await repository.edit(id, edit);
       if (generation !== this.generation) return false;
       this.bridge.show(repository.cards(), repository.catalog);
-      this.bridge.status('Gespeichert · Supabase');
+      this.bridge.status('Saved · Supabase');
       return true;
     } catch {
       if (generation !== this.generation) return false;
@@ -127,10 +128,10 @@ class CloudController {
         if (generation !== this.generation) return false;
         this.bridge.show(cards, repository.catalog);
         this.ready = true;
-        this.bridge.status('Änderung nicht bestätigt oder Konflikt mit einem anderen Gerät. Aktueller Serverstand geladen; bitte Bestand prüfen.', true);
+        this.bridge.status('Change not confirmed, or another device changed this card. Loaded the current server state; check your counts.', true);
       } catch {
         if (generation !== this.generation) return false;
-        this.bridge.status('Verbindung unterbrochen. Speichern ist gesperrt. Bitte neu laden und Bestand prüfen.', true);
+        this.bridge.status('Connection lost. Saving is locked. Reload and check your counts.', true);
       }
       return false;
     } finally {
@@ -146,7 +147,7 @@ class CloudController {
   private async authenticate(signUp: boolean): Promise<void> {
     const form = element<HTMLFormElement>('authForm');
     if (this.authBusy || !form.reportValidity()) return;
-    this.setAuthBusy(true); this.message(signUp ? 'Konto wird erstellt …' : 'Anmeldung läuft …');
+    this.setAuthBusy(true); this.message(signUp ? 'Creating account…' : 'Signing in…');
     try {
       const credentials = { email: element<HTMLInputElement>('authEmail').value.trim(), password: element<HTMLInputElement>('authPassword').value };
       const { data, error } = signUp
@@ -154,9 +155,9 @@ class CloudController {
         : await client.auth.signInWithPassword(credentials);
       element<HTMLInputElement>('authPassword').value = '';
       if (error) throw error;
-      if (signUp && !data.session) this.message('Bitte bestätige deine E-Mail-Adresse und melde dich anschließend an. Falls keine Mail ankommt, muss der E-Mail-Versand in Supabase eingerichtet werden.');
+      if (signUp && !data.session) this.message('Confirm your email address, then sign in. If no email arrives, email delivery must be set up in Supabase.');
     } catch {
-      this.message('Anmeldung oder Registrierung fehlgeschlagen. Bitte Zugangsdaten, E-Mail-Bestätigung und Verbindung prüfen.');
+      this.message('Sign-in or registration failed. Check your credentials, email confirmation and connection.');
     } finally { this.setAuthBusy(false); }
   }
   private async signOut(): Promise<void> {
@@ -165,7 +166,7 @@ class CloudController {
     try {
       const { error } = await client.auth.signOut({ scope: 'local' });
       if (error) throw error;
-    } catch { this.message('Abmelden fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'); }
+    } catch { this.message('Sign-out failed. Check your connection and try again.'); }
     finally { this.setAuthBusy(false); }
   }
 }
@@ -174,7 +175,8 @@ declare global { interface Window { RiftboundCloud: { start(bridge: Bridge): Clo
 window.RiftboundCloud = { start: bridge => {
   if (location.protocol === 'file:') {
     element('authForm').hidden = true;
-    element('authStatus').textContent = 'Lokaler Dateimodus. Für die Online-Sammlung den Tracker über HTTP oder HTTPS öffnen.';
+    element('authStatus').textContent = 'Local file mode. Open the tracker over HTTP or HTTPS to use the online collection.';
+    element('accountLabel').textContent = 'Local file';
     return null;
   }
   return new CloudController(bridge);

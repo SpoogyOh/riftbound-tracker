@@ -1,13 +1,101 @@
 <!DOCTYPE html>
-<html lang="de" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Riftbound TCG – Karten &amp; Foil Tracker</title>
+  <title>Riftbound Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Design tokens shared by Tailwind utilities and the component classes below.
+    if (window.tailwind) tailwind.config = { theme: { extend: { colors: {
+      paper: 'var(--paper)', ink: 'var(--ink)', muted: 'var(--muted)', line: 'var(--line)',
+      soft: 'var(--soft)', accent: 'var(--accent)'
+    } } } };
+  </script>
   <style>
+    @font-face {
+      font-family: 'Archivo';
+      font-style: normal;
+      font-display: swap;
+      font-weight: 100 900;
+      font-stretch: 62% 125%;
+      src: url("fonts/archivo-latin-wdth-normal.woff2") format("woff2");
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    :root {
+      --paper: #ffffff;
+      --ink: #000000;
+      --muted: #666666;
+      --line: #c3c3c3;
+      --soft: #e3e2e2;
+      --accent: #ce5936;
+      --foil: #9a5b00;
+      color-scheme: light;
+    }
+    body { font-family: 'Archivo', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
     [hidden] { display: none !important; }
-    button:disabled, input:disabled { opacity: .4; cursor: not-allowed; }
+    :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    button:disabled, input:disabled, select:disabled, label:has(> input:disabled) { opacity: .35; cursor: not-allowed; }
+
+    /* Type: condensed bold capitals for names and controls, regular text for content. */
+    .caps { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; }
+    .headline { font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: -.01em; }
+
+    /* Controls: square corners, hairlines, black as the only fill. */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.25rem; padding: 0 .875rem; border: 1px solid var(--ink); border-radius: 3px; background: transparent; color: var(--ink); font-size: .8125rem; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; cursor: pointer; }
+    .btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+    .btn-primary { background: var(--ink); color: var(--paper); }
+    .btn-primary:hover:not(:disabled) { background: #333; }
+    .tab { display: inline-flex; align-items: center; gap: .375rem; min-height: 2rem; padding: 0 .625rem; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); font-size: .75rem; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; cursor: pointer; }
+    .tab:hover { border-color: var(--ink); }
+    .tab[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+    .dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 9999px; }
+    .field { width: 100%; height: 2.5rem; padding: 0; border: 0; border-bottom: 1px solid var(--ink); border-radius: 0; background: transparent; color: inherit; font-size: .875rem; }
+    .field:focus { outline: none; border-bottom-width: 2px; }
+    .field::placeholder { color: var(--muted); }
+    .search-field { padding-right: 2.5rem; }
+    .panel .field::placeholder { color: rgba(0, 0, 0, .55); }
+    .box { height: 2rem; padding: 0 .5rem; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); font-size: .75rem; }
+    .step { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); font-size: .75rem; font-weight: 700; cursor: pointer; }
+    .step:hover:not(:disabled) { border-color: var(--ink); }
+    .step-lg { width: 2.75rem; height: 2.75rem; font-size: 1rem; }
+    .count { width: 2.75rem; height: 1.75rem; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); text-align: center; font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .count-sm { width: 2.25rem; }
+    /* Gold is reserved for foil copies; defined after .count and .field so it wins. */
+    .text-foil { color: var(--foil); }
+    .menu-row { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: .625rem 0; border-top: 1px solid rgba(0, 0, 0, .25); font-size: .8125rem; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; text-align: left; cursor: pointer; }
+    .menu-row:hover { text-decoration: underline; }
+    /* Orange marks temporary layers (menus, forms); card art stays on white. */
+    .panel { background: var(--accent); color: var(--ink); }
+    .scrim { background: rgba(0, 0, 0, .4); }
+    #accountMenu { position: fixed; inset: auto; margin: 0; }
+    .option { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2rem; padding: 0 .5rem; border-radius: 3px; text-align: left; font-size: .8125rem; font-stretch: 75%; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; cursor: pointer; }
+    .option:hover { text-decoration: underline; }
+    .option[aria-pressed="true"] { background: var(--ink); color: var(--paper); text-decoration: none; }
+    /* Filters: a sticky sidebar on desktop, a popover sheet below 1024px. */
+    #filterPanel { margin: 0; border: 0; padding: 0; color: inherit; background: var(--paper); overflow: visible; }
+    @media (min-width: 1024px) {
+      #filterPanel { display: block; position: sticky; inset: auto; top: 5rem; align-self: start; width: auto; height: auto; max-height: calc(100vh - 6rem); overflow-y: auto; padding: 1.25rem 0; }
+    }
+    @media (max-width: 1023.98px) {
+      #filterPanel:popover-open { --muted: rgba(0, 0, 0, .65); inset: 0 auto 0 0; width: min(20rem, 88vw); height: 100%; overflow-y: auto; padding: 1.25rem; background: var(--accent); }
+      #filterPanel:popover-open .option:not([aria-pressed="true"]) { background: transparent; }
+    }
+    #filterPanel::backdrop { background: rgba(0, 0, 0, .4); }
+    /* Card panel: the open card is marked in the results; on desktop the page makes room for the panel. */
+    [data-card-id] { scroll-margin-top: 5rem; scroll-margin-bottom: 1rem; }
+    div.is-active { box-shadow: inset 0 0 0 2px var(--ink); }
+    tr.is-active { background: var(--soft); }
+    @media (min-width: 1024px) { body.panel-open { padding-right: 26rem; } }
+    /* Capture drawer: the dialog's own display rules stay intact, so it only shows while open. */
+    #capturePanel { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; }
+    #capturePanel[open] { display: flex; flex-direction: column; }
+    #capturePanel::backdrop { background: rgba(0, 0, 0, .4); }
+    @media (min-width: 1024px) { #capturePanel { inset: 0 0 0 auto; width: 26rem; } }
+    .candidate { display: flex; align-items: center; gap: .75rem; width: 100%; padding: .375rem; border-radius: 3px; text-align: left; cursor: pointer; }
+    .candidate:hover { background: rgba(0, 0, 0, .08); }
+    .candidate[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+
     @keyframes foilShimmer {
       0% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
@@ -64,416 +152,333 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 antialiased min-h-screen p-4 md:p-6">
+<body class="bg-paper text-ink antialiased min-h-screen px-4 md:px-8">
 
-  <div class="max-w-7xl mx-auto space-y-5">
+  <div class="max-w-screen-2xl mx-auto">
 
     <!-- Header -->
-    <header class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-      <div class="space-y-1">
-        <div class="flex items-center gap-2.5 flex-wrap">
-          <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600 text-white font-bold text-sm shadow-sm">
-            RB
-          </span>
-          <h1 class="text-xl font-bold tracking-tight text-white">
-            Riftbound Karten-Tracker
-          </h1>
-          <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium border border-slate-700">
-            Digitales Sammelalbum • Normal &amp; Foil ✨
-          </span>
-        </div>
-        <p class="text-sm text-slate-400">
-          Tracke deine Standard- und Foil-Kopien mit Kartenbildern, Holo-Effekt und Playset-Fortschritt (3×).
-        </p>
+    <header class="sticky top-0 z-30 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-paper border-b border-line flex flex-wrap items-center gap-x-8 gap-y-1">
+      <h1 class="order-1 caps text-[15px] whitespace-nowrap">Riftbound Tracker</h1>
+      <div class="order-4 w-full lg:order-2 lg:w-auto lg:flex-1 lg:max-w-md relative">
+        <input
+          id="searchInput"
+          type="text"
+          aria-label="Search cards"
+          aria-keyshortcuts="/"
+          placeholder="Search name, number, champion or type"
+          class="peer field search-field"
+        />
+        <kbd class="hidden peer-placeholder-shown:block absolute right-0 top-1/2 -translate-y-1/2 caps text-xs text-muted font-sans pointer-events-none" aria-hidden="true">[ / ]</kbd>
+        <button id="btnClearSearch" type="button" aria-label="Clear search" class="hidden absolute right-0 top-1/2 -translate-y-1/2 caps text-xs cursor-pointer">[×]</button>
       </div>
+      <button id="btnCapture" type="button" class="order-2 ml-auto lg:order-3 lg:ml-0 btn btn-primary">+ Capture</button>
+      <p id="storageStatus" role="status" aria-live="polite" class="order-5 w-full lg:order-4 lg:w-auto lg:max-w-sm lg:ml-auto lg:text-right text-xs text-muted">Loading collection…</p>
+      <button id="btnAccountMenu" type="button" popovertarget="accountMenu" class="order-3 lg:order-5 inline-flex items-center gap-1.5 h-10 caps text-[15px] hover:underline cursor-pointer">
+        <span id="accountLabel" class="max-w-[16rem] truncate">Sign in</span>
+        <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </header>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <button id="btnOpenAddModal" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition cursor-pointer shadow-sm">
-          <span>＋ Neue Karte anlegen</span>
-        </button>
-        <button id="btnExportCSV" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-          <span>📊 CSV Export</span>
-        </button>
-        <button id="btnExportJSON" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-          <span>💾 Backup speichern</span>
-        </button>
-        <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-          <span>📂 Backup laden</span>
+    <!-- Account menu: sign-in, sync, and collection data actions -->
+    <div id="accountMenu" popover class="panel w-80 max-w-[calc(100vw-1rem)] p-5 space-y-5">
+      <div class="flex items-center justify-between">
+        <p class="caps text-sm">Account</p>
+        <button type="button" popovertarget="accountMenu" popovertargetaction="hide" aria-label="Close" class="caps text-sm cursor-pointer">[×]</button>
+      </div>
+      <form id="authForm" class="space-y-4">
+        <p class="headline text-3xl leading-[0.9]">Sign in to use your online collection</p>
+        <label class="block text-xs">Email
+          <input id="authEmail" type="email" required autocomplete="username" class="field" />
+        </label>
+        <label class="block text-xs">Password
+          <input id="authPassword" type="password" required minlength="8" autocomplete="current-password" class="field" />
+        </label>
+        <div class="flex gap-2 pt-1">
+          <button id="btnSignIn" type="submit" class="btn btn-primary flex-1">Sign in →</button>
+          <button id="btnSignUp" type="button" class="btn flex-1">Create account</button>
+        </div>
+      </form>
+      <div id="authSignedIn" hidden class="space-y-3">
+        <div>
+          <p class="text-xs">Signed in as</p>
+          <p id="authAccount" class="text-sm font-bold truncate"></p>
+        </div>
+        <div class="flex gap-2">
+          <button id="btnCloudRefresh" type="button" class="btn flex-1">Reload from server</button>
+          <button id="btnSignOut" type="button" class="btn flex-1">Sign out</button>
+        </div>
+      </div>
+      <p id="authStatus" role="status" class="text-xs">Without an account, your collection stays in this browser. Custom cards and backup restore are available in local mode only.</p>
+      <div role="group" aria-label="Collection data">
+        <button id="btnOpenAddModal" type="button" data-close-menu class="menu-row">New custom card <span aria-hidden="true">→</span></button>
+        <button id="btnExportCSV" type="button" data-close-menu class="menu-row">Export CSV <span aria-hidden="true">→</span></button>
+        <button id="btnExportJSON" type="button" data-close-menu class="menu-row">Download backup (JSON) <span aria-hidden="true">→</span></button>
+        <label class="menu-row">
+          Restore backup <span aria-hidden="true">→</span>
           <input id="inputImportJSON" type="file" accept=".json" class="hidden" />
         </label>
       </div>
-    </header>
-
-    <section class="text-xs text-slate-400 space-y-1" aria-live="polite">
-      <p>Kartendaten: <a href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-indigo-300 underline">OpenRift</a> · <span id="catalogStatus"></span></p>
-      <p id="storageStatus" role="status">Sammlung wird geladen …</p>
-      <p>Riftbound Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
-    </section>
-    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3" aria-label="Konto und Online-Sammlung">
-      <h2 class="text-sm font-semibold">Deine Sammlung · lokal oder online</h2>
-      <form id="authForm" class="flex flex-wrap items-end gap-3">
-        <label class="text-xs text-slate-300">E-Mail
-          <input id="authEmail" type="email" required autocomplete="username" class="block mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm" />
-        </label>
-        <label class="text-xs text-slate-300">Passwort
-          <input id="authPassword" type="password" required minlength="8" autocomplete="current-password" class="block mt-1 rounded-lg bg-slate-950 border border-slate-700 p-2 text-sm" />
-        </label>
-        <button id="btnSignIn" type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm">Anmelden</button>
-        <button id="btnSignUp" type="button" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm">Konto erstellen</button>
-      </form>
-      <div id="authSignedIn" hidden class="flex flex-wrap items-center gap-3 text-sm">
-        <span id="authAccount"></span>
-        <button id="btnCloudRefresh" type="button" class="rounded-lg bg-indigo-600 px-3 py-2">Online neu laden</button>
-        <button id="btnSignOut" type="button" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">Abmelden</button>
-      </div>
-      <p id="authStatus" role="status" class="text-xs text-slate-400">Ohne Anmeldung bleibt die Sammlung lokal. Online sind Katalogkarten verfügbar; eigene Karten und Backup-Import bleiben im lokalen Modus.</p>
-    </section>
-    <!-- Stats Row -->
-    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Gesamte Karten (Kopien)</span>
-          <span class="text-sm">🃏</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="statTotalCopies" class="text-2xl font-bold text-white">0</span>
-          <span id="statNormalBreakdown" class="text-xs text-slate-400">(0 Normal)</span>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Foil-Kopien ✨</span>
-          <span class="text-xs px-2 py-0.5 rounded-full foil-badge text-amber-200 font-semibold">FOIL</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="statFoilCopies" class="text-2xl font-bold text-amber-300">0</span>
-          <span id="statFoilRatio" class="text-xs text-slate-400">0% Foil-Anteil</span>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Sammelalbum-Fortschritt</span>
-          <span id="statUniquePercent" class="text-xs font-semibold text-indigo-400">0%</span>
-        </div>
-        <div class="mt-2">
-          <div class="flex items-baseline gap-1.5">
-            <span id="statUniqueOwned" class="text-2xl font-bold text-white">0</span>
-            <span class="text-xs text-slate-400">von <span id="statTotalCatalog">0</span> Karten</span>
-          </div>
-          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-2">
-            <div id="statProgressBar" class="h-full bg-indigo-500 transition-all duration-300" style="width: 0%"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-400">Komplette Playsets (3+)</span>
-          <span class="text-sm">✅</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="statPlaysets" class="text-2xl font-bold text-emerald-400">0</span>
-          <span class="text-xs text-slate-400">spielfertige Sets</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Quick Entry Bar -->
-    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-white">⚡ Schnell-Eingabe (Booster / Stapel scannen):</span>
-          <span class="text-xs text-slate-400 hidden sm:inline">Name oder Nummer (z. B. OGN-001 oder Jinx) eingeben und direkt hinzufügen</span>
-        </div>
-      </div>
-      <form id="quickAddForm" class="mt-3 grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
-        <div class="sm:col-span-5 relative">
-          <input
-            id="quickCardInput"
-            type="text"
-            list="catalogAutocomplete"
-            placeholder="Kartenname oder Nummer (z. B. OGN-001, Ahri, Super Mega Death Rocket)..."
-            class="w-full px-3 py-2 rounded-lg text-sm bg-slate-950 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            required
-          />
-          <datalist id="catalogAutocomplete"></datalist>
-        </div>
-        <div class="sm:col-span-2 flex items-center gap-1.5">
-          <label for="quickNormalDelta" class="text-xs text-slate-400 whitespace-nowrap">+ Normal:</label>
-          <input
-            id="quickNormalDelta"
-            type="number"
-            min="0"
-            max="99"
-            value="1"
-            class="w-full px-2.5 py-2 rounded-lg text-sm text-center font-semibold bg-slate-950 text-white border border-slate-700"
-          />
-        </div>
-        <div class="sm:col-span-2 flex items-center gap-1.5">
-          <label for="quickFoilDelta" class="text-xs text-amber-300 whitespace-nowrap">+ Foil ✨:</label>
-          <input
-            id="quickFoilDelta"
-            type="number"
-            min="0"
-            max="99"
-            value="0"
-            class="w-full px-2.5 py-2 rounded-lg text-sm text-center font-semibold bg-slate-950 text-amber-200 border border-amber-500/40"
-          />
-        </div>
-        <div class="sm:col-span-3 flex items-center gap-2">
-          <button
-            type="submit"
-            class="w-full px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition cursor-pointer shadow-sm"
-          >
-            ＋ Zur Sammlung buchen
-          </button>
-        </div>
-      </form>
-      <p id="quickAddFeedback" class="text-xs text-emerald-400 mt-2 hidden"></p>
-    </section>
-
-    <!-- Filter & Search Controls -->
-    <section class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm space-y-3.5">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div class="relative flex-1">
-          <input
-            id="searchInput"
-            type="text"
-            placeholder="Suche nach Kartenname, Nummer (OGN-001), Champion oder Kartentyp..."
-            class="w-full pl-9 pr-8 py-2 rounded-lg text-sm bg-slate-950 text-white border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <span class="absolute left-3 top-2.5 text-sm text-slate-400">🔍</span>
-          <button id="btnClearSearch" type="button" class="hidden absolute right-2.5 top-2 text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
-            ✕
-          </button>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-1.5" id="ownershipTabs">
-          <button type="button" data-ownership="all" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer transition">
-            Alle
-          </button>
-          <button type="button" data-ownership="owned" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
-            Im Besitz
-          </button>
-          <button type="button" data-ownership="foil" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
-            Nur Foil ✨
-          </button>
-          <button type="button" data-ownership="missing" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
-            Fehlend (0)
-          </button>
-          <button type="button" data-ownership="incomplete" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
-            Playset offen (&lt;3)
-          </button>
-          <button type="button" data-ownership="playset" class="ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition">
-            Playset voll (3+)
-          </button>
-        </div>
-
-        <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 self-start lg:self-auto">
-          <button id="viewBtnTable" type="button" class="px-2.5 py-1 rounded text-xs font-semibold bg-indigo-600 text-white shadow-sm cursor-pointer">
-            ☰ Liste
-          </button>
-          <button id="viewBtnGrid" type="button" class="px-2.5 py-1 rounded text-xs font-medium text-slate-400 hover:text-white cursor-pointer">
-            ⊞ Karten-Grid (Binder)
-          </button>
-        </div>
-      </div>
-
-      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pt-2 border-t border-slate-800">
-        <div class="flex flex-wrap items-center gap-1.5" id="domainPills">
-          <span class="text-xs font-medium text-slate-400 mr-1">Domain:</span>
-          <button type="button" data-domain="all" class="domain-pill px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white cursor-pointer">
-            Alle
-          </button>
-          <button type="button" data-domain="Fury" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            🔴 Fury
-          </button>
-          <button type="button" data-domain="Calm" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            🟢 Calm
-          </button>
-          <button type="button" data-domain="Mind" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            🔵 Mind
-          </button>
-          <button type="button" data-domain="Body" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            🟡 Body
-          </button>
-          <button type="button" data-domain="Chaos" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            🟣 Chaos
-          </button>
-          <button type="button" data-domain="Order" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            🟠 Order
-          </button>
-          <button type="button" data-domain="Neutral" class="domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            ⚪ Neutral
-          </button>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <select id="filterSet" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
-            <option value="all">Alle Sets</option>
-            <option value="OGN">Origins (OGN)</option>
-            <option value="OGS">Proving Grounds (OGS)</option>
-            <option value="SPF">Spiritforged (SPF)</option>
-            <option value="PRM">Promo / Custom (PRM)</option>
-          </select>
-
-          <select id="filterType" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
-            <option value="all">Alle Kartentypen</option>
-            <option value="Legend">Legend</option>
-            <option value="Champion">Champion</option>
-            <option value="Unit">Unit</option>
-            <option value="Spell">Spell</option>
-            <option value="Signature Spell">Signature Spell</option>
-            <option value="Gear">Gear</option>
-            <option value="Battlefield">Battlefield</option>
-            <option value="Rune">Rune</option>
-          </select>
-
-          <select id="filterRarity" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
-            <option value="all">Alle Seltenheiten</option>
-            <option value="Common">Common</option>
-            <option value="Uncommon">Uncommon</option>
-            <option value="Rare">Rare</option>
-            <option value="Epic">Epic</option>
-            <option value="Showcase">Showcase / Alt-Art</option>
-          </select>
-
-          <select id="sortSelect" class="px-2.5 py-1.5 rounded-lg text-xs bg-slate-950 text-slate-200 border border-slate-700">
-            <option value="number">Sortierung: Kartennummer</option>
-            <option value="name">Sortierung: Name (A–Z)</option>
-            <option value="total_desc">Sortierung: Meiste Kopien</option>
-            <option value="foil_desc">Sortierung: Meiste Foils ✨</option>
-            <option value="domain">Sortierung: Domain</option>
-            <option value="rarity">Sortierung: Seltenheit</option>
-          </select>
-        </div>
-      </div>
-    </section>
-
-    <div class="flex items-center justify-between px-1">
-      <p id="resultsCounter" class="text-xs text-slate-400">Zeige 0 Karten • Klicke auf ein Kartenbild für die Großansicht 🔍</p>
-      <button id="btnResetFilters" type="button" class="hidden text-xs font-medium text-indigo-400 underline cursor-pointer">
-        Filter zurücksetzen
-      </button>
     </div>
 
-    <!-- TABLE VIEW -->
-    <section id="tableContainer" class="bg-slate-900 border border-slate-800 rounded-xl shadow-sm overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b border-slate-800 bg-slate-800/60 text-slate-300 text-xs font-semibold">
-              <th class="py-3 px-4">Karte &amp; Nr.</th>
-              <th class="py-3 px-3">Domain</th>
-              <th class="py-3 px-3">Typ &amp; Seltenheit</th>
-              <th class="py-3 px-4 text-center">Normal / Sonderfinish</th>
-              <th class="py-3 px-4 text-center">Foil Kopien ✨</th>
-              <th class="py-3 px-3 text-center">Gesamt / Playset</th>
-              <th class="py-3 px-3 text-right">Aktion</th>
-            </tr>
-          </thead>
-          <tbody id="cardTableBody" class="divide-y divide-slate-800 text-sm"></tbody>
-        </table>
+    <!-- Collection summary -->
+    <section aria-label="Collection progress" class="pt-10 pb-10 flex flex-col lg:flex-row lg:items-end gap-x-16 gap-y-5">
+      <h2 class="headline text-6xl md:text-7xl leading-[0.9]">Collection<sup class="caps text-xs align-top ml-1 relative top-1">[<span id="statUniquePercent">0%</span>]</sup></h2>
+      <div class="text-sm space-y-2.5 lg:pb-1">
+        <p><span id="statUniqueOwned" class="font-bold tabular-nums">0</span> of <span id="statTotalCatalog" class="tabular-nums">0</span> variants owned</p>
+        <div class="w-64 max-w-full h-0.5 bg-soft" aria-hidden="true">
+          <div id="statProgressBar" class="h-full bg-ink transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <p class="text-muted tabular-nums">
+          <span id="statTotalCopies" class="text-ink">0</span> copies ·
+          <span id="statNormalBreakdown" title="Normal or special-finish copies">0 normal</span> ·
+          <span id="statFoilCopies" class="text-foil">0</span> foil (<span id="statFoilRatio">0%</span>) ·
+          <span id="statPlaysets" class="text-ink">0</span> <span title="Variants with a full playset: 3 copies, or 1 for Legends and Battlefields">playsets</span>
+        </p>
       </div>
     </section>
 
-    <!-- GRID VIEW (Binder Look) -->
-    <section id="gridContainer" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"></section>
+    <!-- Collection: filters (sidebar on desktop, sheet on smaller screens) and results -->
+    <div class="border-t border-line lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+      <aside id="filterPanel" popover aria-label="Filters" class="space-y-6">
+        <div class="flex items-center justify-between lg:hidden">
+          <p class="caps text-sm">Filters</p>
+          <button type="button" popovertarget="filterPanel" popovertargetaction="hide" aria-label="Close filters" class="caps text-sm cursor-pointer">[×]</button>
+        </div>
 
-    <!-- Empty State -->
-    <div id="emptyState" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-8 text-center space-y-3">
-      <p class="text-base font-semibold text-white">Keine Karten für diesen Filter gefunden</p>
-      <p class="text-xs text-slate-400">
-        Du kannst die Filter zurücksetzen oder eine neue Karte direkt zu deinem Katalog hinzufügen.
-      </p>
-      <div class="flex justify-center gap-2 pt-1">
-        <button id="btnEmptyReset" type="button" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 cursor-pointer">
-          Filter zurücksetzen
-        </button>
-        <button id="btnEmptyAddCard" type="button" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer">
-          ＋ Neue Karte anlegen
-        </button>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- LIGHTBOX MODAL -->
-  <div id="lightboxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-center justify-between">
         <div>
-          <span id="lightboxNumber" class="font-mono text-xs font-semibold text-slate-400">OGN-001</span>
-          <h3 id="lightboxName" class="text-base font-bold text-white leading-tight">Kartenname</h3>
-        </div>
-        <button id="btnCloseLightbox" type="button" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
-          ✕
-        </button>
-      </div>
-
-      <div id="lightboxImgWrapper" class="relative w-full card-aspect rounded-xl overflow-hidden border border-slate-700 bg-slate-950 shadow-md">
-        <img id="lightboxImg" src="" alt="" class="w-full h-full object-cover" />
-        <div id="lightboxFoilGlare" class="hidden absolute inset-0 foil-image-glare"></div>
-      </div>
-
-      <div class="flex items-center justify-between text-xs text-slate-400 px-1">
-        <span id="lightboxMeta">Domain • Typ • Seltenheit</span>
-        <span id="lightboxPlaysetText" class="font-semibold text-white">0 / 3</span>
-      </div>
-
-      <p id="lightboxRules" class="text-xs text-slate-300 whitespace-pre-line"></p>
-      <a id="lightboxSource" href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-xs text-indigo-300 underline">Kartendetails auf OpenRift ↗</a>
-      <div class="grid grid-cols-2 gap-2.5 pt-1 border-t border-slate-800">
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 flex flex-col items-center gap-1.5">
-          <span id="lightboxFinish" class="text-xs font-medium text-slate-400">Normal Kopien</span>
-          <div class="flex items-center gap-1.5">
-            <button id="lbNormalMinus" type="button" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">−</button>
-            <span id="lbNormalVal" class="w-8 text-center text-sm font-bold text-white">0</span>
-            <button id="lbNormalPlus" type="button" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">＋</button>
+          <p class="caps text-xs text-muted mb-2">Ownership</p>
+          <div class="flex flex-col gap-0.5" id="ownershipTabs">
+            <button type="button" data-ownership="all" aria-pressed="true" class="ownership-tab option">All</button>
+            <button type="button" data-ownership="owned" aria-pressed="false" class="ownership-tab option">Owned</button>
+            <button type="button" data-ownership="foil" aria-pressed="false" class="ownership-tab option">Foil</button>
+            <button type="button" data-ownership="missing" aria-pressed="false" class="ownership-tab option">Missing</button>
+            <button type="button" data-ownership="incomplete" aria-pressed="false" class="ownership-tab option">Incomplete playset</button>
+            <button type="button" data-ownership="playset" aria-pressed="false" class="ownership-tab option">Complete playset</button>
           </div>
         </div>
-        <div class="bg-slate-950 border border-amber-500/30 rounded-xl p-2.5 flex flex-col items-center gap-1.5">
-          <span class="text-xs font-semibold px-2 py-0.5 rounded-full foil-badge text-amber-200">Foil Kopien ✨</span>
-          <div class="flex items-center gap-1.5">
-            <button id="lbFoilMinus" type="button" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">−</button>
-            <span id="lbFoilVal" class="w-8 text-center text-sm font-bold text-amber-200">0</span>
-            <button id="lbFoilPlus" type="button" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">＋</button>
+
+        <div>
+          <p class="caps text-xs text-muted mb-2">Domain</p>
+          <div class="flex flex-col gap-0.5" id="domainPills">
+            <button type="button" data-domain="all" aria-pressed="true" class="domain-pill option">All</button>
+            <button type="button" data-domain="Fury" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#dc2626"></span>Fury</button>
+            <button type="button" data-domain="Calm" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#10b981"></span>Calm</button>
+            <button type="button" data-domain="Mind" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#3b82f6"></span>Mind</button>
+            <button type="button" data-domain="Body" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#f59e0b"></span>Body</button>
+            <button type="button" data-domain="Chaos" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#9333ea"></span>Chaos</button>
+            <button type="button" data-domain="Order" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#ea580c"></span>Order</button>
+            <button type="button" data-domain="Neutral" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#475569"></span>Neutral</button>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <label class="block">
+            <span class="caps text-xs text-muted">Set</span>
+            <select id="filterSet" class="box w-full mt-1">
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="caps text-xs text-muted">Type</span>
+            <select id="filterType" class="box w-full mt-1">
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="caps text-xs text-muted">Rarity</span>
+            <select id="filterRarity" class="box w-full mt-1">
+              <option value="all">All</option>
+            </select>
+          </label>
+        </div>
+
+      </aside>
+
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div class="flex items-center gap-3">
+            <div class="lg:hidden"><button id="btnOpenFilters" type="button" popovertarget="filterPanel" class="btn">Filters <span id="filterCount"></span></button></div>
+            <p id="resultsCounter" class="text-xs text-muted tabular-nums">0 cards</p>
+            <button id="btnResetFilters" type="button" class="hidden caps text-xs underline cursor-pointer">Reset filters</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="sortSelect" aria-label="Sort cards" class="box">
+              <option value="number">Sort: Number</option>
+              <option value="name">Sort: Name (A–Z)</option>
+              <option value="total_desc">Sort: Most copies</option>
+              <option value="foil_desc">Sort: Most foils</option>
+              <option value="domain">Sort: Domain</option>
+              <option value="rarity">Sort: Rarity</option>
+            </select>
+            <button id="viewBtnGrid" type="button" aria-pressed="true" class="tab">Binder</button>
+            <button id="viewBtnTable" type="button" aria-pressed="false" class="tab">List</button>
+          </div>
+        </div>
+
+        <!-- GRID VIEW (Binder Look) -->
+        <section id="gridContainer" aria-label="Binder" class="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] border-t border-l border-line"></section>
+
+        <!-- TABLE VIEW -->
+        <section id="tableContainer" aria-label="List" class="hidden border-t border-ink">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-line caps text-xs">
+                  <th class="py-3 pr-3">Card</th>
+                  <th class="py-3 px-3">Domain</th>
+                  <th class="py-3 px-3">Type &amp; rarity</th>
+                  <th class="py-3 px-3 text-center">Normal / special</th>
+                  <th class="py-3 px-3 text-center">Foil</th>
+                  <th class="py-3 px-3 text-center">Total / playset</th>
+                  <th class="py-3 pl-3 text-right"><span class="sr-only">Edit</span></th>
+                </tr>
+              </thead>
+              <tbody id="cardTableBody" class="divide-y divide-line text-sm"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden border-t border-line py-16 text-center space-y-3">
+          <p class="headline text-3xl leading-[0.9]">No cards match these filters</p>
+          <p class="text-sm text-muted">Reset the filters, or add a custom card in local mode.</p>
+          <div class="flex justify-center gap-2 pt-2">
+            <button id="btnEmptyReset" type="button" class="btn">Reset filters</button>
+            <button id="btnEmptyAddCard" type="button" class="btn btn-primary">New custom card →</button>
           </div>
         </div>
       </div>
     </div>
+
+    <footer class="mt-16 border-t border-line pt-6 pb-8 text-xs text-muted space-y-1">
+      <p>Card data: <a href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-ink underline">OpenRift</a> · <span id="catalogStatus"></span></p>
+      <p>Riftbound Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
+    </footer>
+
   </div>
+
+  <!-- CARD PANEL: a non-modal side panel on desktop, a bottom sheet on smaller screens -->
+  <aside id="cardPanel" hidden role="dialog" aria-modal="false" aria-labelledby="panelName" tabindex="-1"
+    class="fixed z-40 inset-x-0 bottom-0 max-h-[85vh] border-t lg:inset-x-auto lg:top-0 lg:right-0 lg:max-h-none lg:w-96 lg:border-t-0 lg:border-l border-line bg-paper flex flex-col focus:outline-none">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-line">
+      <span id="panelNumber" class="text-xs text-muted tabular-nums">OGN-001</span>
+      <button id="btnClosePanel" type="button" aria-label="Close card" class="caps text-sm cursor-pointer">[×]</button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+      <div id="panelImgWrapper" class="relative mx-auto card-aspect h-[32vh] lg:h-[45vh] max-w-full rounded-md overflow-hidden bg-soft">
+        <img id="panelImg" src="" alt="" class="w-full h-full object-cover" />
+        <div id="panelFoilGlare" class="hidden absolute inset-0 foil-image-glare"></div>
+      </div>
+
+      <div>
+        <h2 id="panelName" class="caps text-xl leading-tight">Card</h2>
+        <p id="panelMeta" class="text-xs text-muted mt-1">Domain · Type · Rarity</p>
+      </div>
+
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-3">
+          <span id="panelFinish" class="caps text-sm">Normal</span>
+          <div class="flex items-center gap-2">
+            <button id="panelNormalMinus" type="button" aria-label="Remove one normal copy" class="step step-lg">−</button>
+            <span id="panelNormalVal" class="w-8 text-center text-lg font-bold tabular-nums">0</span>
+            <button id="panelNormalPlus" type="button" aria-label="Add one normal copy" class="step step-lg">＋</button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <span class="caps text-sm text-foil">Foil</span>
+          <div class="flex items-center gap-2">
+            <button id="panelFoilMinus" type="button" aria-label="Remove one foil copy" class="step step-lg text-foil">−</button>
+            <span id="panelFoilVal" class="w-8 text-center text-lg font-bold text-foil tabular-nums">0</span>
+            <button id="panelFoilPlus" type="button" aria-label="Add one foil copy" class="step step-lg text-foil">＋</button>
+          </div>
+        </div>
+        <p class="flex items-center justify-between text-xs pt-1">
+          <span class="text-muted">Owned</span>
+          <span id="panelPlaysetText" class="font-bold tabular-nums">0 / 3</span>
+        </p>
+      </div>
+
+      <details class="border-t border-line pt-3">
+        <summary class="caps text-xs cursor-pointer">Rules text</summary>
+        <p id="panelRules" class="text-xs whitespace-pre-line mt-2"></p>
+      </details>
+
+      <div class="flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-3">
+        <a id="panelSource" href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="caps text-xs underline">Card on OpenRift ↗</a>
+        <button id="btnPanelEdit" type="button" class="caps text-xs underline cursor-pointer">Edit card &amp; image</button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-line">
+      <button id="btnPanelPrev" type="button" class="btn">← Prev</button>
+      <span class="hidden lg:inline text-xs text-muted">← → browse · Esc close</span>
+      <button id="btnPanelNext" type="button" class="btn">Next →</button>
+    </div>
+  </aside>
+
+  <!-- CAPTURE: fast entry for a pile of cards; a modal drawer on desktop, full screen on phones -->
+  <dialog id="capturePanel" aria-labelledby="captureTitle" class="panel">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-black/25">
+      <h2 id="captureTitle" class="caps text-sm">Capture</h2>
+      <button id="btnCloseCapture" type="button" aria-label="Close capture" class="caps text-sm cursor-pointer">[×]</button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+      <div class="flex items-center justify-between gap-3">
+        <span class="caps text-xs">Finish</span>
+        <div class="flex gap-1.5">
+          <button id="captureNormal" type="button" aria-pressed="true" class="tab">Normal</button>
+          <button id="captureFoil" type="button" aria-pressed="false" class="tab">Foil</button>
+        </div>
+      </div>
+
+      <div>
+        <input id="captureInput" type="text" autofocus autocomplete="off" spellcheck="false"
+          aria-label="Card number or name" aria-controls="captureCandidates"
+          placeholder="OGN-042 or card name, then Enter" class="field" />
+        <p id="captureMessage" role="status" class="text-xs mt-2 min-h-4"></p>
+        <div id="captureCandidates" role="listbox" aria-label="Matching cards" class="mt-2 space-y-0.5"></div>
+      </div>
+
+      <div>
+        <p class="caps text-xs mb-2">Added this session [<span id="captureCount">0</span>]</p>
+        <ul id="captureLog" class="divide-y divide-black/25 border-y border-black/25"></ul>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-black/25">
+      <span class="hidden lg:inline text-xs">↑ ↓ choose · Enter add · Esc close</span>
+      <button id="btnCaptureDone" type="button" class="ml-auto btn btn-primary">Done</button>
+    </div>
+  </dialog>
 
   <!-- MODAL: Add / Edit Card -->
-  <div id="cardModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-    <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto">
-      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-        <h3 id="modalTitle" class="text-base font-bold text-white">Neue Riftbound-Karte hinzufügen</h3>
-        <button id="btnCloseModal" type="button" class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-white cursor-pointer">
-          ✕
-        </button>
+  <div id="cardModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 scrim">
+    <div class="panel max-w-md w-full p-6 space-y-5 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-3">
+        <h3 id="modalTitle" class="headline text-3xl leading-[0.9]">New custom card</h3>
+        <button id="btnCloseModal" type="button" aria-label="Close" class="caps text-sm cursor-pointer">[×]</button>
       </div>
 
-      <form id="modalCardForm" class="space-y-3">
+      <form id="modalCardForm" class="space-y-4">
         <input type="hidden" id="modalCardId" />
 
-        <div class="grid grid-cols-3 gap-2.5">
+        <div class="grid grid-cols-3 gap-4">
           <div class="col-span-1">
-            <label class="block text-xs font-medium text-slate-400 mb-1">Karten-Nr.</label>
-            <input id="modalNumber" type="text" placeholder="OGN-001" required class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700" />
+            <label class="block text-xs">Card number</label>
+            <input id="modalNumber" type="text" placeholder="OGN-001" required class="field" />
           </div>
           <div class="col-span-2">
-            <label class="block text-xs font-medium text-slate-400 mb-1">Kartenname</label>
-            <input id="modalName" type="text" placeholder="z. B. Jinx, Loose Cannon" required class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700" />
+            <label class="block text-xs">Card name</label>
+            <input id="modalName" type="text" placeholder="e.g. Jinx, Loose Cannon" required class="field" />
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-2.5">
+        <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">Set</label>
-            <select id="modalSet" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
+            <label class="block text-xs">Set</label>
+            <select id="modalSet" class="field">
               <option value="OGN">Origins (OGN)</option>
               <option value="OGS">Proving Grounds (OGS)</option>
               <option value="SPF">Spiritforged (SPF)</option>
@@ -481,23 +486,23 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">Domain</label>
-            <select id="modalDomain" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
-              <option value="Fury">🔴 Fury</option>
-              <option value="Calm">🟢 Calm</option>
-              <option value="Mind">🔵 Mind</option>
-              <option value="Body">🟡 Body</option>
-              <option value="Chaos">🟣 Chaos</option>
-              <option value="Order">🟠 Order</option>
-              <option value="Neutral">⚪ Neutral</option>
+            <label class="block text-xs">Domain</label>
+            <select id="modalDomain" class="field">
+              <option value="Fury">Fury</option>
+              <option value="Calm">Calm</option>
+              <option value="Mind">Mind</option>
+              <option value="Body">Body</option>
+              <option value="Chaos">Chaos</option>
+              <option value="Order">Order</option>
+              <option value="Neutral">Neutral</option>
             </select>
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-2.5">
+        <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">Kartentyp</label>
-            <select id="modalType" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
+            <label class="block text-xs">Type</label>
+            <select id="modalType" class="field">
               <option value="Unit">Unit</option>
               <option value="Champion">Champion</option>
               <option value="Legend">Legend</option>
@@ -509,58 +514,54 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">Seltenheit</label>
-            <select id="modalRarity" class="w-full px-3 py-2 rounded-lg text-xs bg-slate-950 text-white border border-slate-700">
+            <label class="block text-xs">Rarity</label>
+            <select id="modalRarity" class="field">
               <option value="Common">Common</option>
               <option value="Uncommon">Uncommon</option>
               <option value="Rare">Rare</option>
               <option value="Epic">Epic</option>
-              <option value="Showcase">Showcase / Alt-Art</option>
+              <option value="Showcase">Showcase / Alt art</option>
             </select>
           </div>
         </div>
 
         <!-- Custom Image URL or File Upload -->
-        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+        <div class="space-y-2 pt-1">
           <div class="flex items-center justify-between">
-            <label class="block text-xs font-medium text-slate-200">Kartenbild (Optional)</label>
-            <span class="text-xs text-slate-400">Leer lassen = Auto-CDN / SVG</span>
+            <label class="caps text-xs">Card image (optional)</label>
+            <span class="text-xs">Empty = catalog image or placeholder</span>
           </div>
           <input
             id="modalImageUrl"
             type="text"
-            placeholder="https://... (oder unten eigene Bilddatei wählen)"
-            class="w-full px-2.5 py-1.5 rounded text-xs bg-slate-900 text-white border border-slate-700"
+            placeholder="https://… (or choose an image file below)"
+            class="field"
           />
           <div class="flex items-center justify-between gap-2 pt-1">
-            <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-slate-800 text-slate-200 border border-slate-700 cursor-pointer hover:bg-slate-700">
-              <span>🖼️ Bilddatei wählen...</span>
+            <label class="btn">
+              <span>Choose image file…</span>
               <input id="modalImageFile" type="file" accept="image/*" class="hidden" />
             </label>
-            <button id="btnClearModalImage" type="button" class="text-xs text-slate-400 hover:text-white underline cursor-pointer">
-              Auf Standardbild zurücksetzen
+            <button id="btnClearModalImage" type="button" class="text-xs underline cursor-pointer">
+              Reset to default image
             </button>
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-2.5 pt-1">
-          <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
-            <label class="block text-xs font-medium text-slate-400 mb-1">Normal Kopien</label>
-            <input id="modalNormal" type="number" min="0" max="999" value="1" class="w-full px-2.5 py-1.5 rounded text-sm font-bold bg-slate-900 text-white border border-slate-700" />
+        <div class="grid grid-cols-2 gap-4 pt-1">
+          <div>
+            <label class="block text-xs">Normal copies</label>
+            <input id="modalNormal" type="number" min="0" max="999" value="1" class="field font-bold" />
           </div>
-          <div class="bg-slate-950 border border-amber-500/30 rounded-lg p-2.5">
-            <label class="block text-xs font-medium text-amber-300 mb-1">Foil Kopien ✨</label>
-            <input id="modalFoil" type="number" min="0" max="999" value="0" class="w-full px-2.5 py-1.5 rounded text-sm font-bold bg-slate-900 text-amber-200 border border-amber-500/40" />
+          <div>
+            <label class="block text-xs">Foil copies</label>
+            <input id="modalFoil" type="number" min="0" max="999" value="0" class="field font-bold" />
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
-          <button id="btnCancelModal" type="button" class="px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer">
-            Abbrechen
-          </button>
-          <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer shadow-sm">
-            Karte speichern
-          </button>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button id="btnCancelModal" type="button" class="btn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save card →</button>
         </div>
       </form>
     </div>

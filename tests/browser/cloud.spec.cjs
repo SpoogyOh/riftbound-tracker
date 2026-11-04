@@ -19,33 +19,39 @@ test('two browser sessions share confirmed counts; conflicts and logout preserve
     },{id:sample.id});
     const page=await context.newPage();
     await page.goto('/');
-    await expect(page.locator('#authStatus')).toContainText('Lokale Sammlung');
+    await expect(page.locator('#authStatus')).toContainText('Local collection');
     await expect(page.locator('#statTotalCopies')).toHaveText('5');
+    await page.locator('#btnAccountMenu').click();
     await page.locator('#authEmail').fill('alice@example.test');
     await page.locator('#authPassword').fill('example-password');
     await page.locator('#btnSignIn').click();
-    await expect(page.locator('#storageStatus')).toContainText('Online-Sammlung geladen');
-    await expect(page.locator('#cardTableBody tr')).toHaveCount(1);
+    await expect(page.locator('#storageStatus')).toContainText('Online collection loaded');
+    await expect(page.locator('#gridContainer > div')).toHaveCount(1);
+    await expect(page.locator('#accountLabel')).toHaveText('alice@example.test');
+    await page.keyboard.press('Escape');
     return page;
   }
   try {
     const first=await device(), second=await device();
-    await first.locator('#cardTableBody button').filter({hasText:'＋'}).first().click();
+    await first.locator('#gridContainer button').filter({hasText:'＋'}).first().click();
     await expect(first.locator('#statTotalCopies')).toHaveText('1');
-    await second.locator('#cardTableBody button').filter({hasText:'＋'}).first().click();
+    // The second device counts through the card panel.
+    await second.locator('#gridContainer img').first().click();
+    await second.locator('#panelNormalPlus').click();
     await expect(second.locator('#statTotalCopies')).toHaveText('2');
     // The first device still has revision 1, so its absolute edit must be rejected.
-    await first.locator('#cardTableBody input').first().fill('7');
-    await first.locator('#cardTableBody input').first().press('Tab');
-    await expect(first.locator('#storageStatus')).toContainText('Aktueller Serverstand geladen');
+    await first.locator('#gridContainer input').first().fill('7');
+    await first.locator('#gridContainer input').first().press('Tab');
+    await expect(first.locator('#storageStatus')).toContainText('Loaded the current server state');
     await expect(first.locator('#statTotalCopies')).toHaveText('2');
     await expect(first.locator('#inputImportJSON')).toBeDisabled();
     await first.screenshot({path:testInfo.outputPath('online-collection.png')});
     await first.reload();
-    await expect(first.locator('#storageStatus')).toContainText('Online-Sammlung geladen');
+    await expect(first.locator('#storageStatus')).toContainText('Online collection loaded');
     await expect(first.locator('#statTotalCopies')).toHaveText('2');
+    await first.locator('#btnAccountMenu').click();
     await first.locator('#btnSignOut').click();
-    await expect(first.locator('#authStatus')).toContainText('Lokale Sammlung');
+    await expect(first.locator('#authStatus')).toContainText('Local collection');
     await expect(first.locator('#statTotalCopies')).toHaveText('5');
   } finally { await Promise.all(contexts.map(context=>context.close())); }
 });

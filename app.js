@@ -2,13 +2,13 @@ const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
 const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
 
 const DOMAIN_META = {
-  Fury:    { icon: '🔴', label: 'Fury',    bg1: '#7f1d1d', bg2: '#dc2626', accent: '#fca5a5' },
-  Calm:    { icon: '🟢', label: 'Calm',    bg1: '#064e3b', bg2: '#10b981', accent: '#6ee7b7' },
-  Mind:    { icon: '🔵', label: 'Mind',    bg1: '#1e3a8a', bg2: '#3b82f6', accent: '#93c5fd' },
-  Body:    { icon: '🟡', label: 'Body',    bg1: '#78350f', bg2: '#f59e0b', accent: '#fde68a' },
-  Chaos:   { icon: '🟣', label: 'Chaos',   bg1: '#4c1d95', bg2: '#9333ea', accent: '#d8b4fe' },
-  Order:   { icon: '🟠', label: 'Order',   bg1: '#7c2d12', bg2: '#ea580c', accent: '#fdba74' },
-  Neutral: { icon: '⚪', label: 'Neutral', bg1: '#1e293b', bg2: '#475569', accent: '#cbd5e1' }
+  Fury:    { label: 'Fury',    bg1: '#7f1d1d', bg2: '#dc2626', accent: '#fca5a5' },
+  Calm:    { label: 'Calm',    bg1: '#064e3b', bg2: '#10b981', accent: '#6ee7b7' },
+  Mind:    { label: 'Mind',    bg1: '#1e3a8a', bg2: '#3b82f6', accent: '#93c5fd' },
+  Body:    { label: 'Body',    bg1: '#78350f', bg2: '#f59e0b', accent: '#fde68a' },
+  Chaos:   { label: 'Chaos',   bg1: '#4c1d95', bg2: '#9333ea', accent: '#d8b4fe' },
+  Order:   { label: 'Order',   bg1: '#7c2d12', bg2: '#ea580c', accent: '#fdba74' },
+  Neutral: { label: 'Neutral', bg1: '#1e293b', bg2: '#475569', accent: '#cbd5e1' }
 };
 
 const TYPE_ICON = {
@@ -39,15 +39,15 @@ const state = {
   type: 'all',
   rarity: 'all',
   sort: 'number',
-  viewMode: 'table',
-  activeLightboxCardId: null
+  viewMode: 'grid',
+  activeCardId: null
 };
 
 function generateCardSvgDataUri(card) {
   const d = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
   const tIcon = TYPE_ICON[card.type] || '🃏';
   const safeNumber = String(card.number || 'OGN').replace(/[<>&"']/g, '');
-  const safeName = String(card.name || 'Karte').replace(/[<>&"']/g, '');
+  const safeName = String(card.name || 'Card').replace(/[<>&"']/g, '');
   const safeType = String(card.type || 'Unit').replace(/[<>&"']/g, '');
   const safeRarity = String(card.rarity || 'Common').replace(/[<>&"']/g, '');
 
@@ -118,7 +118,7 @@ function onlineMode() { return !!cloud && cloud.mode !== 'local'; }
 function setStorageStatus(message, error = false) {
   const el = document.getElementById('storageStatus');
   el.textContent = message;
-  el.classList.toggle('text-red-300', error);
+  el.classList.toggle('text-red-700', error);
 }
 async function loadCollection(isCurrent = () => true) {
   try {
@@ -127,29 +127,29 @@ async function loadCollection(isCurrent = () => true) {
     state.cards = window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], saved);
     persistenceEnabled = true;
     const review = state.cards.filter(c => c.migrationReview).length;
-    setStorageStatus(review ? `${review} bisherige Einträge zur Prüfung erhalten.` : 'Sammlung geladen.');
+    setStorageStatus(review ? `${review} earlier entries kept for review.` : 'Collection loaded.');
   } catch (error) {
     if (!isCurrent()) return;
     persistenceEnabled = false;
     state.cards = (window.DEFAULT_RIFTBOUND_CARDS || []).map(c => ({...c}));
-    setStorageStatus('Gespeicherte Sammlung konnte nicht gelesen werden. Bitte Backup sichern und Seite neu laden; Speichern ist gesperrt.', true);
+    setStorageStatus('Couldn’t read the saved collection. Download a backup and reload the page; saving is locked.', true);
   }
 }
 function saveCollection() {
   if (!persistenceEnabled || onlineMode()) return Promise.resolve(false);
   const record = window.CollectionModel.snapshot(state.cards, currentCatalog());
-  setStorageStatus('Wird gespeichert …');
+  setStorageStatus('Saving…');
   return window.CollectionStorage.save(record).then(mode => {
-    if (!onlineMode()) setStorageStatus(`Gespeichert · ${mode}`);
+    if (!onlineMode()) setStorageStatus(`Saved · ${mode}`);
     return true;
   }).catch(() => {
-    if (!onlineMode()) setStorageStatus('Speichern fehlgeschlagen. Bitte jetzt ein JSON-Backup herunterladen.', true);
+    if (!onlineMode()) setStorageStatus('Saving failed. Download a JSON backup now.', true);
     return false;
   });
 }
 function cardDomains(card) { return card.domains?.length ? card.domains : [card.domain || 'Neutral']; }
 function cardLabel(card) {
-  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Vorschau]' : '') + (card.migrationReview ? ' [Zuordnung prüfen]' : '') + (card.active === false ? ' [Archiviert]' : '');
+  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.migrationReview ? ' [Review match]' : '') + (card.active === false ? ' [Archived]' : '');
 }
 function canCount(card, field) {
   if (cloud?.locked) return false;
@@ -165,12 +165,12 @@ function refreshCatalogControls() {
     ['modalRarity', [...new Set(state.cards.map(c=>c.rarity))]]
   ]) {
     const el=document.getElementById(id), selected=el.value;
-    el.innerHTML=(id.startsWith('filter') ? '<option value="all">Alle</option>' : '') + values.sort().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    el.innerHTML=(id.startsWith('filter') ? '<option value="all">All</option>' : '') + values.sort().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
     if ([...el.options].some(o=>o.value===selected)) el.value=selected;
   }
   const meta=window.OPENRIFT_CATALOG_META;
-  if (liveCatalog) document.getElementById('catalogStatus').textContent=`${liveCatalog.length} Varianten · Supabase`;
-  else if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount} Varianten · ${meta.printingCount} Druckeinträge · Stand ${meta.importedAt.slice(0,10)}`;
+  if (liveCatalog) document.getElementById('catalogStatus').textContent=`${liveCatalog.length.toLocaleString('en-US')} variants · Supabase`;
+  else if(meta) document.getElementById('catalogStatus').textContent=`${meta.cardCount.toLocaleString('en-US')} variants · ${meta.printingCount.toLocaleString('en-US')} printings · updated ${meta.importedAt.slice(0,10)}`;
 }
 
 function getPlaysetTarget(card) {
@@ -187,8 +187,8 @@ function updateCardCount(cardId, field, newValue) {
   state.cards[idx][field] = cleanVal;
   saveCollection();
   renderAll();
-  if (state.activeLightboxCardId === cardId) {
-    syncLightboxView(cardId);
+  if (state.activeCardId === cardId) {
+    syncCardPanel(cardId);
   }
 }
 
@@ -271,7 +271,7 @@ function renderPlaysetDots(total, target) {
   let dots = '';
   for (let i = 1; i <= target; i++) {
     const filled = total >= i;
-    dots += `<span class="inline-block w-2 h-2 rounded-full ${filled ? 'bg-indigo-500' : 'bg-slate-700 border border-slate-600'}"></span>`;
+    dots += `<span class="inline-block w-2 h-2 rounded-full ${filled ? 'bg-ink' : 'border border-line'}"></span>`;
   }
   return dots;
 }
@@ -297,35 +297,27 @@ function renderStats() {
   const uniquePct = catalogSize > 0 ? Math.round((uniqueOwned / catalogSize) * 100) : 0;
   const foilPct = grandTotal > 0 ? Math.round((totalFoil / grandTotal) * 100) : 0;
 
-  document.getElementById('statTotalCopies').textContent = grandTotal.toLocaleString('de-DE');
-  document.getElementById('statNormalBreakdown').textContent = `(${totalNormal.toLocaleString('de-DE')} Normal / Sonderfinish)`;
-  document.getElementById('statFoilCopies').textContent = totalFoil.toLocaleString('de-DE');
-  document.getElementById('statFoilRatio').textContent = `${foilPct}% Foil-Anteil`;
-  document.getElementById('statUniqueOwned').textContent = uniqueOwned.toLocaleString('de-DE');
-  document.getElementById('statTotalCatalog').textContent = catalogSize.toLocaleString('de-DE');
+  document.getElementById('statTotalCopies').textContent = grandTotal.toLocaleString('en-US');
+  document.getElementById('statNormalBreakdown').textContent = `${totalNormal.toLocaleString('en-US')} normal`;
+  document.getElementById('statFoilCopies').textContent = totalFoil.toLocaleString('en-US');
+  document.getElementById('statFoilRatio').textContent = `${foilPct}%`;
+  document.getElementById('statUniqueOwned').textContent = uniqueOwned.toLocaleString('en-US');
+  document.getElementById('statTotalCatalog').textContent = catalogSize.toLocaleString('en-US');
   document.getElementById('statUniquePercent').textContent = `${uniquePct}%`;
   document.getElementById('statProgressBar').style.width = `${uniquePct}%`;
-  document.getElementById('statPlaysets').textContent = playsets.toLocaleString('de-DE');
-
-  const dl = document.getElementById('catalogAutocomplete');
-  dl.innerHTML = state.cards
-    .map(c => `<option value="${escapeHtml(c.number)} – ${escapeHtml(cardLabel(c))} | ${escapeHtml(c.id)}"></option>`)
-    .join('');
+  document.getElementById('statPlaysets').textContent = playsets.toLocaleString('en-US');
 }
 
 function renderListAndGrid() {
   const filtered = getFilteredCards();
   const totalCatalog = state.cards.length;
   document.getElementById('resultsCounter').textContent =
-    `Zeige ${filtered.length} von ${totalCatalog} Karten • Klicke auf ein Kartenbild für die Großansicht 🔍`;
+    `${filtered.length.toLocaleString('en-US')} of ${totalCatalog.toLocaleString('en-US')} cards`;
 
-  const hasFilters =
-    state.search !== '' ||
-    state.ownership !== 'all' ||
-    state.domain !== 'all' ||
-    state.set !== 'all' ||
-    state.type !== 'all' ||
-    state.rarity !== 'all';
+  const activeFilters = ['ownership', 'domain', 'set', 'type', 'rarity'].filter(key => state[key] !== 'all').length;
+  const hasFilters = state.search !== '' || activeFilters > 0;
+  // The sidebar is hidden below 1024px, so the Filters button shows how many apply.
+  document.getElementById('filterCount').textContent = activeFilters ? `[${activeFilters}]` : '';
 
   document.getElementById('btnResetFilters').classList.toggle('hidden', !hasFilters);
   document.getElementById('btnClearSearch').classList.toggle('hidden', state.search === '');
@@ -338,6 +330,7 @@ function renderListAndGrid() {
     emptyEl.classList.remove('hidden');
     tableContainer.classList.add('hidden');
     gridContainer.classList.add('hidden');
+    if (state.activeCardId) syncCardPanel(state.activeCardId);
     return;
   }
 
@@ -352,6 +345,8 @@ function renderListAndGrid() {
     gridContainer.classList.remove('hidden');
     renderGridCards(filtered);
   }
+  // Keep the open card marked and its prev/next buttons current after filtering.
+  if (state.activeCardId) syncCardPanel(state.activeCardId);
 }
 
 function renderTableRows(cards) {
@@ -365,14 +360,14 @@ function renderTableRows(cards) {
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
-      <tr class="group hover:bg-slate-800/60 transition">
-        <td class="py-2 px-4">
+      <tr data-card-id="${escapeHtml(card.id)}" class="group hover:bg-soft/40 transition">
+        <td class="py-2 pr-3">
           <div class="flex items-center gap-3">
             <button
               type="button"
-              onclick="openLightbox('${escapeHtml(card.id)}')"
-              class="relative w-10 h-14 rounded-md overflow-hidden border border-slate-700 bg-slate-950 shrink-0 cursor-pointer shadow-xs group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
-              title="Kartenbild vergrößern"
+              onclick="openCardPanel('${escapeHtml(card.id)}')"
+              class="relative w-10 h-14 rounded overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
+              title="Enlarge card image"
             >
               <img
                 src="${escapeHtml(imgUrl)}"
@@ -385,57 +380,57 @@ function renderTableRows(cards) {
             </button>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-mono text-xs font-semibold text-slate-400">${escapeHtml(card.number)}</span>
-                ${foil > 0 ? `<span class="text-xs px-2 py-0.5 rounded-full foil-badge font-semibold text-amber-200">✨ ${foil}× Foil</span>` : ''}
+                <span class="text-xs text-muted tabular-nums">${escapeHtml(card.number)}</span>
+                ${foil > 0 ? `<span class="caps text-[11px] px-1.5 rounded-[3px] border border-line foil-badge text-foil">${foil}× Foil</span>` : ''}
               </div>
-              <div class="font-semibold text-sm text-slate-100 truncate">${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}</div>
+              <div class="caps text-sm truncate">${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}</div>
             </div>
           </div>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
-          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700">
-            <span>${dMeta.icon}</span>
+          <span class="inline-flex items-center gap-1.5 text-xs">
+            <span class="dot" style="background:${dMeta.bg2}"></span>
             <span>${escapeHtml(cardDomains(card).join(' / '))}</span>
           </span>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
           <div class="flex items-center gap-1.5 text-xs">
-            <span class="text-slate-200 font-medium">${escapeHtml(card.type)}</span>
-            <span class="text-slate-500">•</span>
-            <span class="text-slate-400">${escapeHtml(card.rarity)}</span>
+            <span>${escapeHtml(card.type)}</span>
+            <span class="text-muted">·</span>
+            <span class="text-muted">${escapeHtml(card.rarity)}</span>
           </div>
         </td>
-        <td class="py-2 px-4">
+        <td class="py-2 px-3">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">−</button>
+            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
             <input
               type="number"
               min="0"
               max="999"
               value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
-              class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-slate-900 text-slate-100 border border-slate-700"
+              class="count"
             />
-            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 font-bold text-xs cursor-pointer">＋</button>
+            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
           </div>
         </td>
-        <td class="py-2 px-4">
+        <td class="py-2 px-3">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">−</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
             <input
               type="number"
               min="0"
               max="999"
               value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
-              class="w-12 h-7 text-center rounded-lg text-xs font-bold bg-slate-900 text-amber-200 border border-amber-500/40 ${foil > 0 ? 'foil-badge' : ''}"
+              class="count text-foil ${foil > 0 ? 'foil-badge' : ''}"
             />
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-7 h-7 rounded-lg foil-badge border border-amber-500/40 hover:opacity-80 font-bold text-xs cursor-pointer">＋</button>
+            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
           <div class="inline-flex flex-col items-center gap-1">
-            <span class="text-xs font-bold ${total >= target ? 'text-emerald-400' : 'text-slate-400'}">
+            <span class="text-xs font-bold tabular-nums ${total >= target ? 'text-ink' : 'text-muted'}">
               ${total} / ${target}
             </span>
             <div class="flex items-center gap-1">
@@ -443,8 +438,8 @@ function renderTableRows(cards) {
             </div>
           </div>
         </td>
-        <td class="py-2 px-3 text-right whitespace-nowrap">
-          <button type="button" onclick="openEditModal('${escapeHtml(card.id)}')" class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 cursor-pointer" title="Karte &amp; Bild bearbeiten">
+        <td class="py-2 pl-3 text-right whitespace-nowrap">
+          <button type="button" onclick="openEditModal('${escapeHtml(card.id)}')" class="step" title="Edit card &amp; image">
             ✎
           </button>
         </td>
@@ -464,89 +459,74 @@ function renderGridCards(cards) {
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
-      <div class="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col justify-between transition ${foil > 0 ? 'foil-active-border' : ''}">
-        <div class="relative w-full card-aspect bg-slate-950 overflow-hidden border-b border-slate-800">
+      <div data-card-id="${escapeHtml(card.id)}" class="group border-r border-b border-line p-3 sm:p-4 flex flex-col gap-3">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h3 class="caps text-[15px] leading-tight truncate" title="${escapeHtml(cardLabel(card))}">
+              ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
+            </h3>
+            <p class="text-xs mt-1 flex items-center gap-1.5"><span class="dot" style="background:${dMeta.bg2}"></span>${escapeHtml(cardDomains(card).join(' / '))}</p>
+            <p class="text-xs text-muted">${escapeHtml(card.number)} · ${escapeHtml(card.type)} · ${escapeHtml(card.rarity)}</p>
+          </div>
+          <button
+            type="button"
+            onclick="openEditModal('${escapeHtml(card.id)}')"
+            class="shrink-0 text-xs text-muted hover:text-ink cursor-pointer"
+            title="Edit card &amp; image"
+          >
+            ✎
+          </button>
+        </div>
+
+        <div class="relative w-full card-aspect rounded-md overflow-hidden bg-soft ${foil > 0 ? 'foil-active-border' : ''}">
           <img
             src="${escapeHtml(imgUrl)}"
             alt="${escapeHtml(cardLabel(card))}"
             loading="lazy"
-            onclick="openLightbox('${escapeHtml(card.id)}')"
+            onclick="openCardPanel('${escapeHtml(card.id)}')"
             onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
             class="w-full h-full object-cover cursor-pointer group-hover:scale-103 transition-transform duration-300 ${total === 0 ? 'card-unowned-img' : ''}"
           />
           ${foil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
-
-          <div class="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-black/75 text-slate-100 backdrop-blur-xs">
-              ${escapeHtml(card.number)}
-            </span>
-            <span class="text-xs font-semibold px-2 py-0.5 rounded-md bg-black/75 text-slate-100 backdrop-blur-xs">
-              ${dMeta.icon} ${escapeHtml(cardDomains(card).join(' / '))}
-            </span>
-          </div>
-
-          <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-            ${foil > 0
-              ? `<span class="text-xs px-2 py-0.5 rounded-full foil-badge font-bold text-amber-200 bg-black/70 backdrop-blur-xs">✨ ${foil}× Foil</span>`
-              : `<span></span>`
-            }
-            <button
-              type="button"
-              onclick="openEditModal('${escapeHtml(card.id)}')"
-              class="pointer-events-auto text-xs px-2 py-0.5 rounded-md bg-black/75 text-slate-200 hover:bg-black/95 cursor-pointer"
-              title="Karte &amp; Bild bearbeiten"
-            >
-              ✎
-            </button>
-          </div>
         </div>
 
-        <div class="p-3 space-y-2.5 flex-1 flex flex-col justify-between">
-          <div>
-            <h3 class="font-bold text-sm text-slate-100 leading-snug truncate" title="${escapeHtml(cardLabel(card))}">
-              ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
-            </h3>
-            <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(card.type)} • ${escapeHtml(card.rarity)}</p>
+        <div class="mt-auto space-y-1.5">
+          <div class="hidden sm:flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
+            <span class="caps text-xs truncate">${card.specialFinish ? escapeHtml(card.finishes.join(' / ')) : 'Normal'}</span>
+            <div class="flex items-center gap-1">
+              <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
+                onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
+                class="count count-sm"
+              />
+              <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
+            </div>
           </div>
 
-          <div class="space-y-1.5 pt-2 border-t border-slate-800">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-slate-400">${card.specialFinish ? escapeHtml(card.finishes.join(' / ')) : 'Normal'}:</span>
-              <div class="flex items-center gap-1">
-                <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">−</button>
-                <input
-                  type="number"
-                  min="0"
-                  max="999"
-                  value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
-                  onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
-                  class="w-10 h-6 text-center rounded text-xs font-bold bg-slate-950 text-slate-100 border border-slate-700"
-                />
-                <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="w-6 h-6 rounded bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs cursor-pointer">＋</button>
-              </div>
+          <div class="hidden sm:flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
+            <span class="caps text-xs text-foil">Foil</span>
+            <div class="flex items-center gap-1">
+              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
+                onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
+                class="count count-sm text-foil ${foil > 0 ? 'foil-badge' : ''}"
+              />
+              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
             </div>
+          </div>
 
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold px-1.5 py-0.5 rounded foil-badge text-amber-200">Foil ✨:</span>
-              <div class="flex items-center gap-1">
-                <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">−</button>
-                <input
-                  type="number"
-                  min="0"
-                  max="999"
-                  value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
-                  onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
-                  class="w-10 h-6 text-center rounded text-xs font-bold bg-slate-950 text-amber-200 border border-amber-500/40"
-                />
-                <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="w-6 h-6 rounded foil-badge border border-amber-500/40 font-bold text-xs cursor-pointer">＋</button>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between pt-1">
-              <span class="text-xs text-slate-400">Besitz: <strong class="text-slate-100">${total} / ${target}</strong></span>
-              <div class="flex items-center gap-1">
-                ${renderPlaysetDots(total, target)}
-              </div>
+          <div class="flex items-center justify-between pt-1 text-xs">
+            <span class="text-muted">Owned <strong class="text-ink tabular-nums">${total} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
+            <div class="flex items-center gap-1">
+              ${renderPlaysetDots(total, target)}
             </div>
           </div>
         </div>
@@ -561,59 +541,202 @@ function renderAll() {
   for (const id of ['btnOpenAddModal', 'btnEmptyAddCard', 'inputImportJSON']) {
     document.getElementById(id).disabled = onlineMode();
   }
-  document.querySelector('#quickAddForm button[type="submit"]').disabled = !!cloud?.locked;
   document.querySelector('#modalCardForm button[type="submit"]').disabled = !!cloud?.locked;
   document.getElementById('btnCloudRefresh').disabled = !!cloud?.busy;
-  if (state.activeLightboxCardId) syncLightboxView(state.activeLightboxCardId);
 }
 
-function openLightbox(cardId) {
-  state.activeLightboxCardId = cardId;
-  syncLightboxView(cardId);
-  document.getElementById('lightboxModal').classList.remove('hidden');
+function openCardPanel(cardId) {
+  state.activeCardId = cardId;
+  syncCardPanel(cardId);
+  document.getElementById('cardPanel').hidden = false;
+  document.body.classList.add('panel-open');
 }
 
-function syncLightboxView(cardId) {
+function visibleResultFor(cardId) {
+  const container = document.getElementById(state.viewMode === 'grid' ? 'gridContainer' : 'cardTableBody');
+  return [...container.children].find(el => el.dataset.cardId === cardId);
+}
+
+// Browse in the order the results are shown; does nothing at either end.
+function stepCardPanel(delta) {
+  const cards = getFilteredCards();
+  const index = cards.findIndex(c => c.id === state.activeCardId);
+  const next = index === -1 ? null : cards[index + delta];
+  if (!next) return;
+  openCardPanel(next.id);
+  visibleResultFor(next.id)?.scrollIntoView({ block: 'nearest' });
+}
+
+function syncCardPanel(cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card) return;
   const normal = card.normal || 0;
   const foil = card.foil || 0;
   const total = normal + foil;
   const target = getPlaysetTarget(card);
-  const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
 
-  document.getElementById('lightboxNumber').textContent = card.number;
-  document.getElementById('lightboxName').textContent = cardLabel(card);
-  document.getElementById('lightboxMeta').textContent = `${dMeta.icon} ${cardDomains(card).join(' / ')} • ${card.type} • ${card.rarity}`;
-  document.getElementById('lightboxRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
-  const sourceLink=document.getElementById('lightboxSource');
+  document.getElementById('panelNumber').textContent = card.number;
+  document.getElementById('panelName').textContent = cardLabel(card);
+  document.getElementById('panelMeta').textContent = `${cardDomains(card).join(' / ')} · ${card.type} · ${card.rarity}`;
+  document.getElementById('panelRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
+  const sourceLink=document.getElementById('panelSource');
   sourceLink.href=card.sourceUrl || 'https://openrift.app';
   sourceLink.classList.toggle('hidden', !card.sourceUrl);
-  document.getElementById('lightboxFinish').textContent=card.specialFinish ? `Exemplare: ${card.finishes.join(', ')}` : 'Normal Kopien';
-  for(const [id,field] of [['lbNormalMinus','normal'],['lbNormalPlus','normal'],['lbFoilMinus','foil'],['lbFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
-  document.getElementById('lightboxPlaysetText').textContent = `Gesamt: ${total} / ${target}`;
+  document.getElementById('panelFinish').textContent=card.specialFinish ? card.finishes.join(' / ') : 'Normal';
+  for(const [id,field] of [['panelNormalMinus','normal'],['panelNormalPlus','normal'],['panelFoilMinus','foil'],['panelFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
+  document.getElementById('panelPlaysetText').textContent = `${total} / ${target}`;
 
-  const imgEl = document.getElementById('lightboxImg');
+  const imgEl = document.getElementById('panelImg');
   delete imgEl.dataset.fallbackApplied;
   imgEl.onerror = () => handleCardImageError(imgEl, card.id);
+  imgEl.alt = cardLabel(card);
   imgEl.src = getCardPrimaryImageUrl(card);
 
-  document.getElementById('lightboxFoilGlare').classList.toggle('hidden', foil === 0);
-  document.getElementById('lightboxImgWrapper').classList.toggle('foil-active-border', foil > 0);
+  document.getElementById('panelFoilGlare').classList.toggle('hidden', foil === 0);
+  document.getElementById('panelImgWrapper').classList.toggle('foil-active-border', foil > 0);
 
-  document.getElementById('lbNormalVal').textContent = normal;
-  document.getElementById('lbFoilVal').textContent = foil;
+  document.getElementById('panelNormalVal').textContent = normal;
+  document.getElementById('panelFoilVal').textContent = foil;
+
+  const cards = getFilteredCards();
+  const index = cards.findIndex(c => c.id === cardId);
+  document.getElementById('btnPanelPrev').disabled = index <= 0;
+  document.getElementById('btnPanelNext').disabled = index === -1 || index === cards.length - 1;
+  document.querySelectorAll('[data-card-id].is-active').forEach(el => el.classList.remove('is-active'));
+  visibleResultFor(cardId)?.classList.add('is-active');
 }
 
-function closeLightbox() {
-  state.activeLightboxCardId = null;
-  document.getElementById('lightboxModal').classList.add('hidden');
+function closeCardPanel() {
+  state.activeCardId = null;
+  document.getElementById('cardPanel').hidden = true;
+  document.body.classList.remove('panel-open');
+  document.querySelectorAll('[data-card-id].is-active').forEach(el => el.classList.remove('is-active'));
+}
+
+// Capture: fast entry for a pile of cards. Enter adds one copy in the chosen finish;
+// several matches need an explicit choice, and unknown input never creates a card.
+const CAPTURE_SHOWN = 8;
+const capture = { finish: 'normal', candidates: [], index: -1, log: [], nextId: 1 };
+
+function captureMatches(raw) {
+  const key = raw.trim().toLowerCase();
+  if (!key) return [];
+  const exact = state.cards.filter(c => c.number.toLowerCase() === key || c.name.toLowerCase() === key);
+  return exact.length ? exact : state.cards.filter(c => c.name.toLowerCase().includes(key) || c.number.toLowerCase().includes(key));
+}
+
+function setCaptureMessage(text) {
+  document.getElementById('captureMessage').textContent = text;
+}
+
+function renderCaptureCandidates() {
+  const input = document.getElementById('captureInput');
+  const list = document.getElementById('captureCandidates');
+  const shown = capture.candidates.slice(0, CAPTURE_SHOWN);
+  list.innerHTML = shown.map((card, i) => `
+    <button type="button" id="capture-option-${i}" role="option" aria-selected="${i === capture.index}" data-index="${i}" class="candidate">
+      <img src="${escapeHtml(getCardPrimaryImageUrl(card))}" alt="" loading="lazy" onerror="handleCardImageError(this, '${escapeHtml(card.id)}')" class="w-8 h-11 shrink-0 rounded-sm object-cover bg-soft" />
+      <span class="min-w-0">
+        <span class="caps text-sm block truncate">${escapeHtml(cardLabel(card))}</span>
+        <span class="text-xs block">${escapeHtml(card.number)} · ${card.normal || 0} normal · ${card.foil || 0} foil</span>
+      </span>
+    </button>`).join('');
+  if (input.value.trim() && !capture.candidates.length && !onlineMode()) {
+    list.innerHTML = `<button type="button" data-create class="caps text-xs underline cursor-pointer">Create custom card “${escapeHtml(input.value.trim())}”…</button>`;
+  }
+  if (capture.index >= 0) input.setAttribute('aria-activedescendant', `capture-option-${capture.index}`);
+  else input.removeAttribute('aria-activedescendant');
+}
+
+function updateCaptureCandidates() {
+  const raw = document.getElementById('captureInput').value;
+  capture.candidates = captureMatches(raw);
+  const count = capture.candidates.length;
+  // A single match is the target; several matches wait for an explicit choice.
+  capture.index = count === 1 ? 0 : -1;
+  renderCaptureCandidates();
+  if (!raw.trim()) setCaptureMessage('');
+  else if (!count) setCaptureMessage(onlineMode() ? 'No card in the online catalog matches.' : 'No card found.');
+  else if (count === 1) setCaptureMessage('Enter adds this card.');
+  else setCaptureMessage(`${count} cards match. Choose one with ↑ ↓ or a click.${count > CAPTURE_SHOWN ? ` Showing the first ${CAPTURE_SHOWN}; keep typing.` : ''}`);
+}
+
+function renderCaptureLog() {
+  document.getElementById('captureCount').textContent = capture.log.length;
+  document.getElementById('captureLog').innerHTML = capture.log.map(entry => `
+    <li class="flex items-center justify-between gap-3 py-2">
+      <span class="min-w-0">
+        <span class="caps text-sm block truncate">${escapeHtml(entry.label)}</span>
+        <span class="text-xs">${escapeHtml(entry.number)} · ${entry.finish === 'foil' ? 'Foil' : 'Normal'} +1</span>
+      </span>
+      <button type="button" data-undo="${entry.id}" class="caps text-xs underline cursor-pointer">Undo</button>
+    </li>`).join('');
+}
+
+function setCaptureFinish(finish) {
+  capture.finish = finish;
+  document.getElementById('captureNormal').setAttribute('aria-pressed', String(finish === 'normal'));
+  document.getElementById('captureFoil').setAttribute('aria-pressed', String(finish === 'foil'));
+  document.getElementById('captureInput').focus();
+}
+
+async function addCaptured(card) {
+  const finish = capture.finish;
+  if (cloud?.locked) return setCaptureMessage('Still saving. Try again in a moment.');
+  if (!canCount(card, finish)) return setCaptureMessage(`${cardLabel(card)} has no ${finish} version.`);
+  if ((card[finish] || 0) >= 999) return setCaptureMessage(`${cardLabel(card)} already has 999 ${finish} copies.`);
+  const label = cardLabel(card);
+  // Clear first so the next card can be typed while an online save is pending.
+  document.getElementById('captureInput').value = '';
+  capture.candidates = [];
+  capture.index = -1;
+  renderCaptureCandidates();
+  const ok = await adjustCardCount(card.id, finish, 1);
+  if (ok === false) return setCaptureMessage(`Not confirmed: ${label}. Check the save status and your counts.`);
+  capture.log.unshift({ id: capture.nextId++, cardId: card.id, label, number: card.number, finish });
+  renderCaptureLog();
+  setCaptureMessage(`Added ${label} · ${finish}.`);
+}
+
+async function undoCaptured(entryId) {
+  const entry = capture.log.find(e => e.id === entryId);
+  if (!entry) return;
+  if (cloud?.locked) return setCaptureMessage('Still saving. Try again in a moment.');
+  const card = state.cards.find(c => c.id === entry.cardId);
+  if (card && (card[entry.finish] || 0) > 0) {
+    const ok = await adjustCardCount(entry.cardId, entry.finish, -1);
+    if (ok === false) return setCaptureMessage(`Undo not confirmed: ${entry.label}. Check the save status and your counts.`);
+    setCaptureMessage(`Removed one ${entry.finish} ${entry.label}.`);
+  } else {
+    setCaptureMessage(`${entry.label} has no ${entry.finish} copies left to remove.`);
+  }
+  capture.log = capture.log.filter(e => e !== entry);
+  renderCaptureLog();
+}
+
+function openCapture() {
+  const dialog = document.getElementById('capturePanel');
+  capture.log = [];
+  capture.candidates = [];
+  capture.index = -1;
+  document.getElementById('captureInput').value = '';
+  renderCaptureLog();
+  renderCaptureCandidates();
+  setCaptureMessage('');
+  // The attribute fallback covers environments without <dialog> methods, such as jsdom.
+  if (!dialog.open) dialog.showModal ? dialog.showModal() : dialog.setAttribute('open', '');
+  document.getElementById('captureInput').focus();
+}
+
+function closeCapture() {
+  const dialog = document.getElementById('capturePanel');
+  if (dialog.open) dialog.close ? dialog.close() : dialog.removeAttribute('open');
 }
 
 function openAddModal(prefillName = '') {
   if (onlineMode()) return;
   for(const id of ['modalNumber','modalName','modalSet','modalDomain','modalType','modalRarity','modalNormal','modalFoil']) document.getElementById(id).disabled=false;
-  document.getElementById('modalTitle').textContent = 'Neue Riftbound-Karte hinzufügen';
+  document.getElementById('modalTitle').textContent = 'New custom card';
   document.getElementById('modalCardId').value = '';
   const nextNum = `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
   document.getElementById('modalNumber').value = nextNum;
@@ -636,7 +759,7 @@ function openEditModal(cardId) {
   document.getElementById('modalNormal').disabled=!canCount(card,'normal');
   document.getElementById('modalFoil').disabled=!canCount(card,'foil');
   modalCloudToken = cloud?.editToken(cardId);
-  document.getElementById('modalTitle').textContent = 'Karte & Bild bearbeiten';
+  document.getElementById('modalTitle').textContent = 'Edit card & image';
   document.getElementById('modalCardId').value = card.id;
   document.getElementById('modalNumber').value = card.number;
   document.getElementById('modalName').value = card.name;
@@ -657,14 +780,14 @@ function closeModal() {
 window.adjustCardCount = adjustCardCount;
 window.updateCardCount = updateCardCount;
 window.openEditModal = openEditModal;
-window.openLightbox = openLightbox;
+window.openCardPanel = openCardPanel;
 window.handleCardImageError = handleCardImageError;
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (window.RiftboundCloud) {
     cloud = window.RiftboundCloud.start({
       status: setStorageStatus,
-      clear() { liveCatalog = null; state.cards = []; closeModal(); closeLightbox(); renderAll(); },
+      clear() { liveCatalog = null; state.cards = []; closeModal(); closeCardPanel(); closeCapture(); renderAll(); },
       show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
       async local(isCurrent) { await loadCollection(isCurrent); if (isCurrent()) refreshCatalogControls(); },
       render: renderAll
@@ -673,21 +796,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!cloud) { await loadCollection(); refreshCatalogControls(); }
   renderAll();
 
-  document.getElementById('btnCloseLightbox').addEventListener('click', closeLightbox);
-  document.getElementById('lightboxModal').addEventListener('click', e => {
-    if (e.target.id === 'lightboxModal') closeLightbox();
+  document.getElementById('btnClosePanel').addEventListener('click', closeCardPanel);
+  document.getElementById('btnPanelPrev').addEventListener('click', () => stepCardPanel(-1));
+  document.getElementById('btnPanelNext').addEventListener('click', () => stepCardPanel(1));
+  document.getElementById('btnPanelEdit').addEventListener('click', () => {
+    if (state.activeCardId) openEditModal(state.activeCardId);
   });
-  document.getElementById('lbNormalMinus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'normal', -1);
-  });
-  document.getElementById('lbNormalPlus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'normal', 1);
-  });
-  document.getElementById('lbFoilMinus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'foil', -1);
-  });
-  document.getElementById('lbFoilPlus').addEventListener('click', () => {
-    if (state.activeLightboxCardId) adjustCardCount(state.activeLightboxCardId, 'foil', 1);
+  for (const [id, field, delta] of [['panelNormalMinus', 'normal', -1], ['panelNormalPlus', 'normal', 1], ['panelFoilMinus', 'foil', -1], ['panelFoilPlus', 'foil', 1]]) {
+    document.getElementById(id).addEventListener('click', () => {
+      if (state.activeCardId) adjustCardCount(state.activeCardId, field, delta);
+    });
+  }
+  document.addEventListener('keydown', e => {
+    if (!state.activeCardId || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    // Menus and the edit dialog handle their own keys while open.
+    if (document.querySelector(':popover-open') || document.getElementById('capturePanel').open || !document.getElementById('cardModal').classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeCardPanel();
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      stepCardPanel(e.key === 'ArrowRight' ? 1 : -1);
+    }
   });
 
   document.getElementById('modalImageFile').addEventListener('change', e => {
@@ -704,7 +833,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('modalImageFile').value = '';
   });
 
+  const accountMenu = document.getElementById('accountMenu');
+  accountMenu.addEventListener('beforetoggle', e => {
+    if (e.newState !== 'open') return;
+    // Popovers open in the top layer; align this one below its trigger.
+    const r = document.getElementById('btnAccountMenu').getBoundingClientRect();
+    accountMenu.style.top = `${r.bottom + 8}px`;
+    accountMenu.style.right = `${Math.max(8, document.documentElement.clientWidth - r.right)}px`;
+  });
+  accountMenu.addEventListener('click', e => {
+    if (e.target.closest('[data-close-menu]')) accountMenu.hidePopover?.();
+  });
+  document.getElementById('inputImportJSON').addEventListener('change', () => accountMenu.hidePopover?.());
+
   const searchInput = document.getElementById('searchInput');
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    e.preventDefault();
+    searchInput.focus();
+  });
   searchInput.addEventListener('input', e => {
     state.search = e.target.value;
     renderListAndGrid();
@@ -721,9 +869,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.ownership = btn.dataset.ownership;
       document.querySelectorAll('.ownership-tab').forEach(b => {
         const active = b.dataset.ownership === state.ownership;
-        b.className = active
-          ? 'ownership-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white cursor-pointer transition'
-          : 'ownership-tab px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer transition';
+        b.setAttribute('aria-pressed', String(active));
       });
       renderListAndGrid();
     });
@@ -734,9 +880,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.domain = btn.dataset.domain;
       document.querySelectorAll('.domain-pill').forEach(b => {
         const active = b.dataset.domain === state.domain;
-        b.className = active
-          ? 'domain-pill px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white cursor-pointer'
-          : 'domain-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer';
+        b.setAttribute('aria-pressed', String(active));
       });
       renderListAndGrid();
     });
@@ -763,14 +907,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const viewBtnGrid = document.getElementById('viewBtnGrid');
   viewBtnTable.addEventListener('click', () => {
     state.viewMode = 'table';
-    viewBtnTable.className = 'px-2.5 py-1 rounded text-xs font-semibold bg-indigo-600 text-white shadow-sm cursor-pointer';
-    viewBtnGrid.className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-400 hover:text-white cursor-pointer';
+    viewBtnTable.setAttribute('aria-pressed', 'true');
+    viewBtnGrid.setAttribute('aria-pressed', 'false');
     renderListAndGrid();
   });
   viewBtnGrid.addEventListener('click', () => {
     state.viewMode = 'grid';
-    viewBtnGrid.className = 'px-2.5 py-1 rounded text-xs font-semibold bg-indigo-600 text-white shadow-sm cursor-pointer';
-    viewBtnTable.className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-400 hover:text-white cursor-pointer';
+    viewBtnGrid.setAttribute('aria-pressed', 'true');
+    viewBtnTable.setAttribute('aria-pressed', 'false');
     renderListAndGrid();
   });
 
@@ -785,80 +929,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('filterSet').value = 'all';
     document.getElementById('filterType').value = 'all';
     document.getElementById('filterRarity').value = 'all';
-    document.querySelector('[data-ownership="all"]').click();
-    document.querySelector('[data-domain="all"]').click();
+    // Update the pressed states directly so the reset renders once, not three times.
+    document.querySelectorAll('.ownership-tab').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ownership === 'all')));
+    document.querySelectorAll('.domain-pill').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.domain === 'all')));
     renderListAndGrid();
   }
   document.getElementById('btnResetFilters').addEventListener('click', resetAllFilters);
   document.getElementById('btnEmptyReset').addEventListener('click', resetAllFilters);
 
-  document.getElementById('quickAddForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    if (cloud?.locked) return;
-    const rawInput = document.getElementById('quickCardInput').value.trim();
-    if (!rawInput) return;
-    const addNormal = Math.max(0, parseInt(document.getElementById('quickNormalDelta').value, 10) || 0);
-    const addFoil = Math.max(0, parseInt(document.getElementById('quickFoilDelta').value, 10) || 0);
-
-    const explicitId=rawInput.includes(' | ') ? rawInput.split(' | ').at(-1) : null;
-    let searchKey = rawInput;
-    if (rawInput.includes('–')) {
-      searchKey = rawInput.split('–')[0].trim();
+  const captureInput = document.getElementById('captureInput');
+  document.getElementById('btnCapture').addEventListener('click', openCapture);
+  document.getElementById('btnCloseCapture').addEventListener('click', closeCapture);
+  document.getElementById('btnCaptureDone').addEventListener('click', closeCapture);
+  document.getElementById('captureNormal').addEventListener('click', () => setCaptureFinish('normal'));
+  document.getElementById('captureFoil').addEventListener('click', () => setCaptureFinish('foil'));
+  captureInput.addEventListener('input', updateCaptureCandidates);
+  captureInput.addEventListener('keydown', e => {
+    const shown = Math.min(capture.candidates.length, CAPTURE_SHOWN);
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && shown) {
+      e.preventDefault();
+      capture.index = e.key === 'ArrowDown' ? (capture.index + 1) % shown : (capture.index <= 0 ? shown - 1 : capture.index - 1);
+      renderCaptureCandidates();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const card = capture.candidates[capture.index];
+      if (card) addCaptured(card);
+      else if (capture.candidates.length > 1) setCaptureMessage(`${capture.candidates.length} cards match. Choose one with ↑ ↓ or a click.`);
     }
-
-    const lowerKey = searchKey.toLowerCase();
-    let matches = explicitId ? state.cards.filter(c=>c.id===explicitId) : state.cards.filter(
-      c => c.number.toLowerCase() === lowerKey || c.name.toLowerCase() === lowerKey
-    );
-    if (!matches.length && !explicitId) matches=state.cards.filter(c=>c.name.toLowerCase().includes(lowerKey) || c.number.toLowerCase().includes(lowerKey));
-    const found = matches.length === 1 ? matches[0] : null;
-
-    const feedbackEl = document.getElementById('quickAddFeedback');
-    feedbackEl.classList.remove('hidden');
-
-    if (matches.length > 1) {
-      feedbackEl.textContent='Mehrere Varianten gefunden. Bitte eine vollständige Variante aus den Vorschlägen auswählen.';
-      return;
+  });
+  document.getElementById('captureCandidates').addEventListener('click', e => {
+    const option = e.target.closest('[data-index]');
+    if (option) { captureInput.focus(); addCaptured(capture.candidates[Number(option.dataset.index)]); return; }
+    if (e.target.closest('[data-create]')) {
+      const name = captureInput.value.trim();
+      closeCapture();
+      openAddModal(name);
     }
-    if (found && ((!canCount(found,'normal') && addNormal) || (!canCount(found,'foil') && addFoil))) {
-      feedbackEl.textContent='Diese Ausführung ist im Katalog für das gewählte Finish nicht verfügbar.';
-      return;
-    }
-    if (onlineMode()) {
-      if (!found) { feedbackEl.textContent = 'Bitte eine Variante aus dem Online-Katalog auswählen. Eigene Karten bleiben lokal.'; return; }
-      // Both finish deltas form one revision-checked edit, so quick entry is all-or-nothing.
-      const ok = await cloud.change(found.id, { normal: Math.min(999, found.normal + addNormal), foil: Math.min(999, found.foil + addFoil) });
-      feedbackEl.textContent = ok ? '✔ Online gebucht.' : 'Nicht bestätigt. Bitte Speicherstatus und aktuellen Bestand prüfen.';
-      return;
-    }
-    if (found) {
-      found.normal = Math.min(999, (found.normal || 0) + addNormal);
-      found.foil = Math.min(999, (found.foil || 0) + addFoil);
-      saveCollection();
-      renderAll();
-      feedbackEl.textContent = `✔ Gebucht: ${found.number} ${found.name} (+${addNormal} Normal, +${addFoil} Foil ✨ → Jetzt: ${found.normal} Normal / ${found.foil} Foil)`;
-    } else {
-      const isCode = /^[A-Z]{3}-\d+/i.test(rawInput);
-      const newNum = isCode ? rawInput.toUpperCase() : `OGN-${String(state.cards.length + 1).padStart(3, '0')}`;
-      const newCard = {
-        id: `custom-${crypto.randomUUID()}`,
-        number: newNum,
-        name: rawInput,
-        set: 'OGN',
-        domain: 'Neutral',
-        type: 'Unit',
-        rarity: 'Common',
-        normal: Math.min(999,addNormal),
-        foil: Math.min(999,addFoil)
-      };
-      state.cards.unshift(newCard);
-      saveCollection();
-      renderAll();
-      feedbackEl.textContent = `✨ Neue Karte angelegt & gebucht: "${newCard.name}" (${addNormal} Normal / ${addFoil} Foil)`;
-    }
-
-    document.getElementById('quickCardInput').value = '';
-    document.getElementById('quickCardInput').focus();
+  });
+  document.getElementById('captureLog').addEventListener('click', e => {
+    const undo = e.target.closest('[data-undo]');
+    if (undo) undoCaptured(Number(undo.dataset.undo));
   });
 
   document.getElementById('btnOpenAddModal').addEventListener('click', () => openAddModal());
@@ -935,14 +1045,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const items=Array.isArray(imported) ? imported : imported.schemaVersion===3 ? imported.items : null;
         window.CollectionModel.validateItems(items);
         const restored=window.CollectionModel.merge(window.DEFAULT_RIFTBOUND_CARDS || [], items);
-        if (!confirm('Backup laden und den aktuellen Bestand ersetzen?')) return;
+        if (!confirm('Restore this backup and replace your current collection?')) return;
         state.cards=restored;
         persistenceEnabled=true;
         refreshCatalogControls();
         saveCollection();
         renderAll();
       } catch (err) {
-        alert('Ungültiges Backup: ' + err.message);
+        alert('Invalid backup: ' + err.message);
       }
     };
     reader.readAsText(file);
