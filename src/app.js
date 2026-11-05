@@ -27,7 +27,7 @@ const state = {
   playsets: new Map(),
   search: '',
   ownership: 'all',
-  domain: 'all',
+  domains: new Set(),
   set: 'all',
   type: 'all',
   rarity: 'all',
@@ -204,7 +204,7 @@ function getFilteredCards() {
     if (state.ownership === 'incomplete' && playsetTotal >= target) return false;
     if (state.ownership === 'playset' && playsetTotal < target) return false;
 
-    if (state.domain !== 'all' && !cardDomains(card).includes(state.domain)) return false;
+    if (state.domains.size > 0 && !cardDomains(card).some(domain => state.domains.has(domain))) return false;
     if (state.set !== 'all' && card.set !== state.set) return false;
     if (state.type !== 'all' && card.type !== state.type) return false;
     if (state.rarity !== 'all' && card.rarity !== state.rarity) return false;
@@ -292,7 +292,7 @@ function renderListAndGrid() {
   document.getElementById('resultsCounter').textContent =
     `${filtered.length.toLocaleString('en-US')} of ${totalCatalog.toLocaleString('en-US')} cards`;
 
-  const activeFilters = ['ownership', 'domain', 'set', 'type', 'rarity'].filter(key => state[key] !== 'all').length;
+  const activeFilters = ['ownership', 'set', 'type', 'rarity'].filter(key => state[key] !== 'all').length + (state.domains.size > 0 ? 1 : 0);
   const hasFilters = state.search !== '' || activeFilters > 0;
   // The sidebar is hidden below 1024px, so the Filters button shows how many apply.
   document.getElementById('filterCount').textContent = activeFilters ? `[${activeFilters}]` : '';
@@ -835,9 +835,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.querySelectorAll('.domain-pill').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.domain = btn.dataset.domain;
+      const domain = btn.dataset.domain;
+      if (domain === 'all') state.domains.clear();
+      else if (state.domains.has(domain)) state.domains.delete(domain);
+      else state.domains.add(domain);
       document.querySelectorAll('.domain-pill').forEach(b => {
-        const active = b.dataset.domain === state.domain;
+        const active = b.dataset.domain === 'all' ? state.domains.size === 0 : state.domains.has(b.dataset.domain);
         b.setAttribute('aria-pressed', String(active));
       });
       renderListAndGrid();
@@ -879,7 +882,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function resetAllFilters() {
     state.search = '';
     state.ownership = 'all';
-    state.domain = 'all';
+    state.domains.clear();
     state.set = 'all';
     state.type = 'all';
     state.rarity = 'all';

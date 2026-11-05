@@ -38,6 +38,75 @@ async function app(t,state) {
   return {w,d,text,signIn,signedOut,legacyUntouched};
 }
 
+test('domain buttons toggle independently with OR matching, unique results and complete resets', async t=>{
+  const find=(...domains)=>fullCatalog.find(c=>c.details.domains.length===domains.length && domains.every(domain=>c.details.domains.includes(domain)));
+  const fury=find('Fury'), body=find('Body'), dual=find('Fury','Body'), mind=find('Mind'), neutral=find('Neutral');
+  const cards=[fury,body,dual,mind,neutral];
+  assert.ok(cards.every(Boolean));
+  const {d,text,signIn}=await app(t,apiFixture(cards));
+  await signIn();
+  await waitFor(()=>text('resultsCounter')==='5 of 5 cards');
+  const button=domain=>d.querySelector(`[data-domain="${domain}"]`);
+  const click=domain=>button(domain).click();
+  const ids=()=>[...d.querySelectorAll('#gridContainer > div')].map(el=>el.dataset.cardId).sort();
+  const expectCards=(...cards)=>assert.deepEqual(ids(),cards.map(c=>c.id).sort());
+  const expectPressed=(...domains)=>{
+    for(const el of d.querySelectorAll('.domain-pill')) {
+      assert.equal(el.getAttribute('aria-pressed'),String(domains.includes(el.dataset.domain)),el.dataset.domain);
+    }
+  };
+  expectPressed('all');
+  click('Fury');
+  expectCards(fury,dual);
+  click('Body');
+  expectCards(fury,body,dual);
+  expectPressed('Fury','Body');
+  assert.equal(text('resultsCounter'),'3 of 5 cards');
+  assert.equal(text('filterCount'),'[1]');
+  click('Fury');
+  expectCards(body,dual);
+  expectPressed('Body');
+  click('Body');
+  expectCards(...cards);
+  expectPressed('all');
+  assert.equal(text('filterCount'),'');
+  assert.ok(d.getElementById('btnResetFilters').classList.contains('hidden'));
+
+  click('Neutral');
+  expectCards(neutral);
+  click('Fury');
+  expectCards(neutral,fury,dual);
+  expectPressed('Neutral','Fury');
+  click('all');
+  expectCards(...cards);
+  expectPressed('all');
+
+  click('Body'); click('Fury'); click('Mind');
+  d.getElementById('viewBtnTable').click();
+  const tableIds=()=>[...d.querySelectorAll('#cardTableBody tr')].map(el=>el.dataset.cardId).sort();
+  assert.deepEqual(tableIds(),[fury,body,dual,mind].map(c=>c.id).sort());
+  click('Body');
+  assert.deepEqual(tableIds(),[fury,dual,mind].map(c=>c.id).sort());
+  const type=d.getElementById('filterType');
+  type.value=dual.details.type; type.dispatchEvent(new d.defaultView.Event('change'));
+  assert.deepEqual(tableIds(),[dual.id]);
+  assert.equal(text('filterCount'),'[2]');
+  const search=d.getElementById('searchInput');
+  search.value='no-matching-card'; search.dispatchEvent(new d.defaultView.Event('input'));
+  assert.ok(!d.getElementById('emptyState').classList.contains('hidden'));
+  d.getElementById('btnEmptyReset').click();
+  assert.equal(tableIds().length,5);
+  expectPressed('all');
+  assert.equal(type.value,'all');
+  assert.equal(search.value,'');
+  assert.equal(text('filterCount'),'');
+  click('Fury'); click('Body');
+  d.getElementById('btnResetFilters').click();
+  assert.equal(tableIds().length,5);
+  expectPressed('all');
+  assert.equal(text('filterCount'),'');
+});
+
 test('OGN-027 and OGN-027a share playset progress in stats, filters, grid, table and panel', async t=>{
   const base=fullCatalog.find(c=>c.number==='OGN-027');
   const alt=fullCatalog.find(c=>c.number==='OGN-027a');

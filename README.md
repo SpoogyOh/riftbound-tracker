@@ -47,7 +47,7 @@ When setting up another host, configure its app URL and email delivery in Supaba
 - Separate normal and foil quantities, with buttons and direct number entry.
 - Binder and list views, a card panel that stays open beside the results (arrow keys browse, Esc closes), foil effects, and collection statistics.
 - Capture mode for a pile of cards: type a collector number or name and press Enter to add one copy in the chosen finish. Ambiguous matches require an explicit variant selection, unknown input changes nothing, and each addition can be undone.
-- Filters for ownership, domains, set, card type, and rarity, plus several sorting options.
+- Filters for ownership, domains (select multiple; cards match any selected domain), set, card type, and rarity, plus several sorting options. Click a selected domain to deselect it; All or an empty selection includes every domain.
 - English card catalog imported from [OpenRift](https://openrift.app/developers).
 - JSON backup and CSV export.
 - Custom image URLs or uploaded images per card.
