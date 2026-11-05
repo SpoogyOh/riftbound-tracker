@@ -131,8 +131,7 @@ test('Rune variants each require ten copies in stats, filters, grid, table and p
   for(const [card,total] of [[base,4],[alt,6]]) {
     const tile=d.querySelector(`#gridContainer [data-card-id="${card.id}"]`);
     assert.match(tile.textContent,new RegExp(`Playset\\s+${total} / 10`));
-    assert.equal(tile.querySelectorAll('.rounded-full').length,10);
-    assert.equal(tile.querySelectorAll('.bg-ink').length,total);
+    assert.equal(tile.querySelectorAll('.rounded-full').length,0);
   }
   w.openCardPanel(base.id);
   assert.equal(text('panelPlaysetText'),'4 / 10');
@@ -151,6 +150,7 @@ test('Rune variants each require ten copies in stats, filters, grid, table and p
   d.getElementById('viewBtnTable').click();
   const row=d.querySelector('#cardTableBody tr');
   assert.equal(row.cells[5].textContent.trim().replace(/\s+/g,' '),'6 / 10');
+  assert.equal(row.cells[5].querySelectorAll('.rounded-full').length,0);
   await w.updateCardCount(alt.id,'foil',10);
   assert.equal(text('statPlaysets'),'2');
   assert.equal(d.querySelectorAll('#cardTableBody tr').length,0);

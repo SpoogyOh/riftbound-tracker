@@ -246,12 +246,13 @@ function escapeHtml(str) {
 }
 
 function renderPlaysetDots(total, target) {
+  if (target === 10) return '';
   let dots = '';
   for (let i = 1; i <= target; i++) {
     const filled = total >= i;
     dots += `<span class="inline-block w-2 h-2 rounded-full ${filled ? 'bg-ink' : 'border border-line'}"></span>`;
   }
-  return target === 10 ? `<span class="grid grid-cols-5 gap-1">${dots}</span>` : dots;
+  return dots;
 }
 
 function renderStats() {
