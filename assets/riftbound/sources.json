@@ -1,0 +1,223 @@
+{
+  "category": "https://wiki.leagueoflegends.com/en-us/Category:RB_icons",
+  "retrievedAt": "2026-11-05",
+  "files": [
+    {
+      "file": "RB_artist_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_artist_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_artist_icon.svg",
+      "sha256": "a75890ca3abd47164149a5395ee04b6d199cba5f390267619d701a8cfdd9b88e",
+      "bytes": 847
+    },
+    {
+      "file": "RB_battlefield_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_battlefield_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_battlefield_icon.png",
+      "sha256": "66639c4c63ec2c8f585731b3d16f3a39dfcb3ecb6ea27a5cc734793cffadcb03",
+      "bytes": 567
+    },
+    {
+      "file": "RB_body_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_body_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_body_icon.svg",
+      "sha256": "bee43afc350d18353aaaa9c13a57f14d823f60a22d14d6fb290dbe2425ba4473",
+      "bytes": 812
+    },
+    {
+      "file": "RB_body_rune_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_body_rune_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_body_rune_icon.png",
+      "sha256": "1cb2e51cdb4c9e2a4698835d55b8b51287b764a74f2fa14c943b598aa21d0867",
+      "bytes": 950
+    },
+    {
+      "file": "RB_calm_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_calm_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_calm_icon.svg",
+      "sha256": "36ca6f0ea4cdb83cab004b184b2dea9945d837c59143901a73c33027de8a6685",
+      "bytes": 1452
+    },
+    {
+      "file": "RB_calm_rune_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_calm_rune_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_calm_rune_icon.png",
+      "sha256": "417669234970ac30bbfbd37a874f46b79a85ced0e1300f50d7764d629a03fc49",
+      "bytes": 1164
+    },
+    {
+      "file": "RB_champion_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_champion_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_champion_icon.png",
+      "sha256": "13d692080e60359820de8f3030328bba8ae5121145bcbf93a25d35c0daae3866",
+      "bytes": 930
+    },
+    {
+      "file": "RB_chaos_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_chaos_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_chaos_icon.svg",
+      "sha256": "6c41d4a35fcdbbe5f49277cfcc7908f6224075807bd9bf539079444f6d1dc2ff",
+      "bytes": 1922
+    },
+    {
+      "file": "RB_chaos_rune_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_chaos_rune_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_chaos_rune_icon.png",
+      "sha256": "c42e6640d90d5b550d215bd6d433581da99e58b524685b241cfc3547d30e9f9c",
+      "bytes": 1264
+    },
+    {
+      "file": "RB_common_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_common_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_common_icon.png",
+      "sha256": "9805f0d62529f59c66650d4e7d2d0e4c592d96511d241461243b2cce170900b0",
+      "bytes": 174367
+    },
+    {
+      "file": "RB_epic_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_epic_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_epic_icon.png",
+      "sha256": "bc120f8b1157be758c0ffddaff347bb4c6b271d870596a72d6ec686b524c05b4",
+      "bytes": 182041
+    },
+    {
+      "file": "RB_exhaust_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_exhaust_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_exhaust_icon.svg",
+      "sha256": "c56654ec201efac8f36f54cfebb836ce194c7d34a03601d9342182832c1824a2",
+      "bytes": 1718
+    },
+    {
+      "file": "RB_fury_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_fury_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_fury_icon.svg",
+      "sha256": "787470f80f15108695da8320e0b05f4145111f6c48275152fedf16949b8b5148",
+      "bytes": 1446
+    },
+    {
+      "file": "RB_fury_rune_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_fury_rune_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_fury_rune_icon.png",
+      "sha256": "73b142d2ad19e03ba09722bc7c25e4b57f66cd051583ebb8eec2a0dad8b56fbb",
+      "bytes": 1089
+    },
+    {
+      "file": "RB_gear_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_gear_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_gear_icon.png",
+      "sha256": "e4a2603030555516537792bc266d98c3d03fff3ac734ae337fc201bc97e487d7",
+      "bytes": 1018
+    },
+    {
+      "file": "RB_legend_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_legend_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_legend_icon.png",
+      "sha256": "a7456cfaad1a5af3c68d870d6ee266602ff6241ced1484d290df30ec42431318",
+      "bytes": 836
+    },
+    {
+      "file": "RB_might_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_might_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_might_icon.svg",
+      "sha256": "914fe195f7e8f5573347fd071e8230d888a7000adb4feba552918501b0e12e7c",
+      "bytes": 966
+    },
+    {
+      "file": "RB_mind_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_mind_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_mind_icon.svg",
+      "sha256": "ef4f1aaf194d98eafd454f6837db134f9c02600ef4f5a376c9f08702e7c8a977",
+      "bytes": 1059
+    },
+    {
+      "file": "RB_mind_rune_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_mind_rune_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_mind_rune_icon.png",
+      "sha256": "ab0cd3150af63ad213684b44aaec39f2c9c83ba56ea0b74990a35c68975c72aa",
+      "bytes": 828
+    },
+    {
+      "file": "RB_order_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_order_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_order_icon.svg",
+      "sha256": "2e88b7485154ef567b36b6b16a4572efe2de499b7393ef3331df11e4d92f814d",
+      "bytes": 1063
+    },
+    {
+      "file": "RB_order_rune_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_order_rune_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_order_rune_icon.png",
+      "sha256": "897ecdfec652edb902dca508b3aa9b14ff79402715a1fd1c5c3939fdf3e4cce8",
+      "bytes": 857
+    },
+    {
+      "file": "RB_rare_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_rare_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_rare_icon.png",
+      "sha256": "c3a70ff66120d5b66b3e3bc72745a361da674c8b2e2d1632b3d6d7d2db4f2774",
+      "bytes": 138183
+    },
+    {
+      "file": "RB_riftbound_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_riftbound_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_riftbound_icon.svg",
+      "sha256": "96130c25bafa419960c044c8e2019ef91bc4e35ff0c8196d2da6965bae1b62dc",
+      "bytes": 3882
+    },
+    {
+      "file": "RB_rune_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_rune_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_rune_icon.png",
+      "sha256": "f3f781cd2de17925634b057f28821848f9da47a0ddc153652a0746171958e8a9",
+      "bytes": 354
+    },
+    {
+      "file": "RB_rune_rune_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_rune_rune_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_rune_rune_icon.svg",
+      "sha256": "e80e3be1a2ecdb4f78999013b2edfc989b6c3b306bfba43b19a6c6381b8f28cb",
+      "bytes": 3201
+    },
+    {
+      "file": "RB_showcase_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_showcase_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_showcase_icon.png",
+      "sha256": "d4f195d57346b47dc8efb08c11c759e75b7dac3599263c81cff7177490ac0d6a",
+      "bytes": 183964
+    },
+    {
+      "file": "RB_spell_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_spell_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_spell_icon.png",
+      "sha256": "c4eb5143de7db347010d1d69aebdeceb91e459493cde2b12175a967872bb187f",
+      "bytes": 922
+    },
+    {
+      "file": "RB_uncommon_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_uncommon_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_uncommon_icon.png",
+      "sha256": "67c3b1009d9f9ebfe53171e6584f560fc831d1e2955f2add5cebb7534266c8e1",
+      "bytes": 152094
+    },
+    {
+      "file": "RB_unit_icon.png",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_unit_icon.png",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_unit_icon.png",
+      "sha256": "960fd83a4923db5f3f4028cb1aa2ec25a1df8ce087fab1ce961deaf1c63a8650",
+      "bytes": 842
+    },
+    {
+      "file": "RB_wild_rune_icon.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:RB_wild_rune_icon.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/RB_wild_rune_icon.svg",
+      "sha256": "18268753229dac936d6187e02bf97012431e7ab69d842bcfbe2a3a3411598ea9",
+      "bytes": 2463
+    },
+    {
+      "file": "Riftbound_icon_nav.svg",
+      "source": "https://wiki.leagueoflegends.com/en-us/File:Riftbound_icon_nav.svg",
+      "download": "https://wiki.leagueoflegends.com/en-us/images/Riftbound_icon_nav.svg",
+      "sha256": "b70fc27f376c019d514c216d8e3622084768dfeb64dafa0ce8d6ac43ccb038e3",
+      "bytes": 3793
+    }
+  ]
+}

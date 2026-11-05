@@ -1,4 +1,6 @@
 // @ts-nocheck -- untyped interface code; it moves to typed modules in a later step.
+import { getPlaysetKey, getPlaysetTarget, summarizePlaysets } from './playsets.js';
+import { DOMAIN_ICONS, TYPE_ICONS, RARITY_ICONS, FALLBACK_ICON } from './icons.js';
 const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
 const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
 
@@ -12,17 +14,6 @@ const DOMAIN_META = {
   Neutral: { label: 'Neutral', bg1: '#1e293b', bg2: '#475569', accent: '#cbd5e1' }
 };
 
-const TYPE_ICON = {
-  'Legend': '👑',
-  'Champion': '⚔️',
-  'Unit': '🛡️',
-  'Spell': '🔥',
-  'Signature Spell': '✨',
-  'Gear': '⚙️',
-  'Battlefield': '🏰',
-  'Rune': '💎'
-};
-
 const RARITY_ORDER = {
   Common: 1,
   Uncommon: 2,
@@ -33,6 +24,7 @@ const RARITY_ORDER = {
 
 const state = {
   cards: [],
+  playsets: new Map(),
   search: '',
   ownership: 'all',
   domain: 'all',
@@ -46,7 +38,7 @@ const state = {
 
 function generateCardSvgDataUri(card) {
   const d = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
-  const tIcon = TYPE_ICON[card.type] || '🃏';
+  const tIcon = TYPE_ICONS[card.type] || FALLBACK_ICON;
   const safeNumber = String(card.number || 'OGN').replace(/[<>&"']/g, '');
   const safeName = String(card.name || 'Card').replace(/[<>&"']/g, '');
   const safeType = String(card.type || 'Unit').replace(/[<>&"']/g, '');
@@ -82,7 +74,7 @@ function generateCardSvgDataUri(card) {
     <rect x="10" y="10" width="230" height="330" rx="12" fill="none" stroke="url(#frame)" stroke-width="2"/>
     <rect x="18" y="44" width="214" height="175" rx="8" fill="#090d16" fill-opacity="0.45" stroke="${d.accent}" stroke-opacity="0.35" stroke-width="1"/>
     <circle cx="125" cy="132" r="46" fill="${d.bg2}" fill-opacity="0.35" stroke="${d.accent}" stroke-opacity="0.5" stroke-width="1.5"/>
-    <text x="125" y="147" font-family="sans-serif" font-size="44" text-anchor="middle">${tIcon}</text>
+    <image x="97" y="104" width="56" height="56" href="${escapeHtml(tIcon)}"/>
     <text x="22" y="31" font-family="monospace" font-weight="bold" font-size="13" fill="${d.accent}">${safeNumber}</text>
     <text x="228" y="31" font-family="sans-serif" font-weight="bold" font-size="12" fill="#ffffff" fill-opacity="0.9" text-anchor="end">${d.label.toUpperCase()}</text>
     <rect x="18" y="232" width="214" height="94" rx="8" fill="#090d16" fill-opacity="0.72" stroke="${d.accent}" stroke-opacity="0.3" stroke-width="1"/>
@@ -120,6 +112,18 @@ function setStorageStatus(message, error = false) {
   el.classList.toggle('text-red-700', error);
 }
 function cardDomains(card) { return card.domains?.length ? card.domains : [card.domain || 'Neutral']; }
+function renderIcon(src, type = false) {
+  return src ? `<img src="${escapeHtml(src)}" width="16" height="16" alt="" aria-hidden="true" class="rb-icon${type ? ' rb-type-icon' : ''}" />` : '';
+}
+function renderDomains(card) {
+  return cardDomains(card).map(domain => `<span class="rb-label">${renderIcon(DOMAIN_ICONS[domain])}${escapeHtml(domain)}</span>`).join('<span aria-hidden="true"> / </span>');
+}
+function renderType(card) {
+  return `<span class="rb-label">${renderIcon(TYPE_ICONS[card.type], true)}${escapeHtml(card.type)}</span>`;
+}
+function renderRarity(card) {
+  return `<span class="rb-label">${renderIcon(RARITY_ICONS[card.rarity])}${escapeHtml(card.rarity)}</span>`;
+}
 function cardLabel(card) {
   return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.active === false ? ' [Archived]' : '');
 }
@@ -153,9 +157,12 @@ function backupRecord() {
   return { schemaVersion: 3, savedAt: new Date().toISOString(), items };
 }
 
-function getPlaysetTarget(card) {
-  if (card.type === 'Legend' || card.type === 'Battlefield') return 1;
-  return 3;
+function getPlaysetTotal(card) {
+  return state.playsets.get(getPlaysetKey(card))?.total || 0;
+}
+
+function getPlaysetDescription(card) {
+  return card.type === 'Rune' ? 'Normal and foil copies of this rune variant' : 'Normal and foil copies across all variants of this card';
 }
 
 function updateCardCount(cardId, field, newValue) {
@@ -180,6 +187,7 @@ function getFilteredCards() {
   const filtered = state.cards.filter(card => {
     const total = (card.normal || 0) + (card.foil || 0);
     const target = getPlaysetTarget(card);
+    const playsetTotal = getPlaysetTotal(card);
 
     if (q) {
       const matchName = card.name.toLowerCase().includes(q);
@@ -193,8 +201,8 @@ function getFilteredCards() {
     if (state.ownership === 'owned' && total === 0) return false;
     if (state.ownership === 'foil' && (card.foil || 0) === 0) return false;
     if (state.ownership === 'missing' && total > 0) return false;
-    if (state.ownership === 'incomplete' && total >= target) return false;
-    if (state.ownership === 'playset' && total < target) return false;
+    if (state.ownership === 'incomplete' && playsetTotal >= target) return false;
+    if (state.ownership === 'playset' && playsetTotal < target) return false;
 
     if (state.domain !== 'all' && !cardDomains(card).includes(state.domain)) return false;
     if (state.set !== 'all' && card.set !== state.set) return false;
@@ -238,6 +246,7 @@ function escapeHtml(str) {
 }
 
 function renderPlaysetDots(total, target) {
+  if (target === 10) return '';
   let dots = '';
   for (let i = 1; i <= target; i++) {
     const filled = total >= i;
@@ -250,7 +259,6 @@ function renderStats() {
   let totalNormal = 0;
   let totalFoil = 0;
   let uniqueOwned = 0;
-  let playsets = 0;
 
   for (const c of state.cards) {
     const n = c.normal || 0;
@@ -259,7 +267,6 @@ function renderStats() {
     totalNormal += n;
     totalFoil += f;
     if (tot > 0) uniqueOwned++;
-    if (tot >= getPlaysetTarget(c)) playsets++;
   }
 
   const grandTotal = totalNormal + totalFoil;
@@ -275,6 +282,7 @@ function renderStats() {
   document.getElementById('statTotalCatalog').textContent = catalogSize.toLocaleString('en-US');
   document.getElementById('statUniquePercent').textContent = `${uniquePct}%`;
   document.getElementById('statProgressBar').style.width = `${uniquePct}%`;
+  const playsets = [...state.playsets.values()].filter(p => p.total >= p.target).length;
   document.getElementById('statPlaysets').textContent = playsets.toLocaleString('en-US');
 }
 
@@ -329,7 +337,7 @@ function renderTableRows(cards) {
     const foil = card.foil || 0;
     const total = normal + foil;
     const target = getPlaysetTarget(card);
-    const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
+    const playsetTotal = getPlaysetTotal(card);
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
@@ -361,16 +369,15 @@ function renderTableRows(cards) {
           </div>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
-          <span class="inline-flex items-center gap-1.5 text-xs">
-            <span class="dot" style="background:${dMeta.bg2}"></span>
-            <span>${escapeHtml(cardDomains(card).join(' / '))}</span>
+          <span class="rb-domains text-xs">
+            ${renderDomains(card)}
           </span>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
           <div class="flex items-center gap-1.5 text-xs">
-            <span>${escapeHtml(card.type)}</span>
+            ${renderType(card)}
             <span class="text-muted">·</span>
-            <span class="text-muted">${escapeHtml(card.rarity)}</span>
+            ${renderRarity(card)}
           </div>
         </td>
         <td class="py-2 px-3">
@@ -402,12 +409,12 @@ function renderTableRows(cards) {
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
-          <div class="inline-flex flex-col items-center gap-1">
-            <span class="text-xs font-bold tabular-nums ${total >= target ? 'text-ink' : 'text-muted'}">
-              ${total} / ${target}
+          <div class="inline-flex flex-col items-center gap-1" title="${getPlaysetDescription(card)}">
+            <span class="text-xs font-bold tabular-nums ${playsetTotal >= target ? 'text-ink' : 'text-muted'}">
+              ${playsetTotal} / ${target}
             </span>
             <div class="flex items-center gap-1">
-              ${renderPlaysetDots(total, target)}
+              ${renderPlaysetDots(playsetTotal, target)}
             </div>
           </div>
         </td>
@@ -428,7 +435,7 @@ function renderGridCards(cards) {
     const foil = card.foil || 0;
     const total = normal + foil;
     const target = getPlaysetTarget(card);
-    const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
+    const playsetTotal = getPlaysetTotal(card);
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
@@ -438,8 +445,8 @@ function renderGridCards(cards) {
             <h3 class="caps text-[15px] leading-tight truncate" title="${escapeHtml(cardLabel(card))}">
               ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
             </h3>
-            <p class="text-xs mt-1 flex items-center gap-1.5"><span class="dot" style="background:${dMeta.bg2}"></span>${escapeHtml(cardDomains(card).join(' / '))}</p>
-            <p class="text-xs text-muted">${escapeHtml(card.number)} · ${escapeHtml(card.type)} · ${escapeHtml(card.rarity)}</p>
+            <p class="text-xs mt-1">${escapeHtml(card.number)}</p>
+            <p class="text-xs text-muted flex flex-wrap items-center gap-1">${renderType(card)} · ${renderRarity(card)}</p>
           </div>
           <button
             type="button"
@@ -496,10 +503,10 @@ function renderGridCards(cards) {
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-1 text-xs">
-            <span class="text-muted">Owned <strong class="text-ink tabular-nums">${total} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
+          <div class="flex flex-wrap items-center justify-between gap-1 pt-1 text-xs" title="${getPlaysetDescription(card)}">
+            <span class="text-muted">Playset <strong class="text-ink tabular-nums">${playsetTotal} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
             <div class="flex items-center gap-1">
-              ${renderPlaysetDots(total, target)}
+              ${renderPlaysetDots(playsetTotal, target)}
             </div>
           </div>
         </div>
@@ -542,19 +549,21 @@ function syncCardPanel(cardId) {
   if (!card) return;
   const normal = card.normal || 0;
   const foil = card.foil || 0;
-  const total = normal + foil;
   const target = getPlaysetTarget(card);
 
   document.getElementById('panelNumber').textContent = card.number;
   document.getElementById('panelName').textContent = cardLabel(card);
-  document.getElementById('panelMeta').textContent = `${cardDomains(card).join(' / ')} · ${card.type} · ${card.rarity}`;
+  document.getElementById('panelMeta').innerHTML = `${renderDomains(card)} · ${renderType(card)} · ${renderRarity(card)}`;
   document.getElementById('panelRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
   const sourceLink=document.getElementById('panelSource');
   sourceLink.href=card.sourceUrl || 'https://openrift.app';
   sourceLink.classList.toggle('hidden', !card.sourceUrl);
   document.getElementById('panelFinish').textContent=card.specialFinish ? card.finishes.join(' / ') : 'Normal';
   for(const [id,field] of [['panelNormalMinus','normal'],['panelNormalPlus','normal'],['panelFoilMinus','foil'],['panelFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
-  document.getElementById('panelPlaysetText').textContent = `${total} / ${target}`;
+  document.getElementById('panelPlaysetText').textContent = `${getPlaysetTotal(card)} / ${target}`;
+  const playsetLabel = document.getElementById('panelPlaysetLabel');
+  playsetLabel.textContent = card.type === 'Rune' ? 'Playset · this variant' : 'Playset · all variants';
+  playsetLabel.title = getPlaysetDescription(card);
 
   const imgEl = document.getElementById('panelImg');
   delete imgEl.dataset.fallbackApplied;
@@ -724,16 +733,23 @@ window.openCardPanel = openCardPanel;
 window.handleCardImageError = handleCardImageError;
 
 document.addEventListener('DOMContentLoaded', async () => {
+  for (const button of document.querySelectorAll('.domain-pill')) {
+    const icon = DOMAIN_ICONS[button.dataset.domain];
+    if (icon) button.insertAdjacentHTML('afterbegin', renderIcon(icon));
+  }
   if (window.RiftboundCloud) {
     cloud = window.RiftboundCloud.start({
       status: setStorageStatus,
       clear() {
-        liveCatalog = null; state.cards = [];
+        liveCatalog = null; state.cards = []; state.playsets = new Map();
         closeModal(); closeCardPanel(); closeCapture();
         for (const id of ['accountMenu', 'filterPanel']) document.getElementById(id).hidePopover?.();
         renderAll();
       },
-      show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
+      show(cards, catalog) {
+        liveCatalog = catalog; state.cards = cards; state.playsets = summarizePlaysets(cards);
+        refreshCatalogControls();
+      },
       render: renderAll
     });
   }

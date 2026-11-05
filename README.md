@@ -53,7 +53,7 @@ When setting up another host, configure its app URL and email delivery in Supaba
 - Custom image URLs or uploaded images per card.
 - Online changes confirmed by the server, atomic counter increments, conflict detection for absolute edits, and an explicit reload button.
 
-Normal/foil twins share one catalog row with two counters. Alternate art, signatures, promo markers, different sizes, and special metal finishes remain separate variants. The normal/special-finish counter stores metal copies; unavailable finishes are disabled. Catalog progress counts variants rather than only distinct game cards.
+Normal/foil twins share one catalog row with two counters. Alternate art, signatures, promo markers, different sizes, and special metal finishes remain separate variants. The normal/special-finish counter stores metal copies; unavailable finishes are disabled. Catalog progress counts variants rather than only distinct game cards. Playsets require 10 copies per Rune variant, 1 for Legends and Battlefields, and 3 for other cards. Normal and foil copies count together. Rune variants have independent playsets; all other cards combine variants with the same `cardId`, including variants outside the current search or filters. The playset statistic counts each completed Rune variant or other game card once. Quantity controls, ownership filters, exports and catalog progress remain per variant.
 
 ## Repository map
 
@@ -66,6 +66,7 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `src/app.js` | Connects the interface to the data. Handles clicks, counters, filtering, rendering, statistics, images, capture, and exports. Not yet type-checked. | Change how the app behaves. |
 | `vite.config.mjs` | Vite and Tailwind build settings, development and preview server. | Change the build. |
 | `fonts/` | Self-hosted Archivo variable font (SIL Open Font License, see `OFL.txt`). | Replace or update the interface font. |
+| `assets/riftbound/` / `src/icons.ts` | Original Riftbound icons from the League of Legends Wiki, with source URLs, checksums and UI mappings. | Update game symbols; see the asset directory's attribution notes. |
 | `src/cloud.ts` | TypeScript login/session controller and account-bound Supabase clients. | Change authentication and online state transitions. |
 | `src/cloud-repository.ts` | Typed paginated catalog reads, private collection reads, atomic adjustments, and revision-checked edits. | Change online data access. |
 | `tests/cloud-repository.test.mjs` / `tests/cloud-app.test.mjs` | Exercise the real SDK against deterministic Auth/PostgREST responses: pagination, accounts, conflicts, failed writes, capture, and that old local data stays untouched. | Verify online behavior without sending email or writing real collections. |

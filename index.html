@@ -89,7 +89,7 @@
           <span id="statTotalCopies" class="text-ink">0</span> copies ·
           <span id="statNormalBreakdown" title="Normal or special-finish copies">0 normal</span> ·
           <span id="statFoilCopies" class="text-foil">0</span> foil (<span id="statFoilRatio">0%</span>) ·
-          <span id="statPlaysets" class="text-ink">0</span> <span title="Variants with a full playset: 3 copies, or 1 for Legends and Battlefields">playsets</span>
+          <span id="statPlaysets" class="text-ink">0</span> <span title="Complete playsets: 10 copies per Rune variant, 1 for Legends and Battlefields, 3 for other cards. Normal and foil count together; variants combine except for Runes.">playsets</span>
         </p>
       </div>
     </section>
@@ -118,13 +118,13 @@
           <p class="caps text-xs text-muted mb-2">Domain</p>
           <div class="flex flex-col gap-0.5" id="domainPills">
             <button type="button" data-domain="all" aria-pressed="true" class="domain-pill option">All</button>
-            <button type="button" data-domain="Fury" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#dc2626"></span>Fury</button>
-            <button type="button" data-domain="Calm" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#10b981"></span>Calm</button>
-            <button type="button" data-domain="Mind" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#3b82f6"></span>Mind</button>
-            <button type="button" data-domain="Body" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#f59e0b"></span>Body</button>
-            <button type="button" data-domain="Chaos" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#9333ea"></span>Chaos</button>
-            <button type="button" data-domain="Order" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#ea580c"></span>Order</button>
-            <button type="button" data-domain="Neutral" aria-pressed="false" class="domain-pill option"><span class="dot" style="background:#475569"></span>Neutral</button>
+            <button type="button" data-domain="Fury" aria-pressed="false" class="domain-pill option">Fury</button>
+            <button type="button" data-domain="Calm" aria-pressed="false" class="domain-pill option">Calm</button>
+            <button type="button" data-domain="Mind" aria-pressed="false" class="domain-pill option">Mind</button>
+            <button type="button" data-domain="Body" aria-pressed="false" class="domain-pill option">Body</button>
+            <button type="button" data-domain="Chaos" aria-pressed="false" class="domain-pill option">Chaos</button>
+            <button type="button" data-domain="Order" aria-pressed="false" class="domain-pill option">Order</button>
+            <button type="button" data-domain="Neutral" aria-pressed="false" class="domain-pill option">Neutral</button>
           </div>
         </div>
 
@@ -186,7 +186,7 @@
                   <th class="py-3 px-3">Type &amp; rarity</th>
                   <th class="py-3 px-3 text-center">Normal / special</th>
                   <th class="py-3 px-3 text-center">Foil</th>
-                  <th class="py-3 px-3 text-center">Total / playset</th>
+                  <th class="py-3 px-3 text-center" title="Normal and foil count together. Runes: 10 copies per variant. Other cards combine variants.">Playset</th>
                   <th class="py-3 pl-3 text-right"><span class="sr-only">Edit</span></th>
                 </tr>
               </thead>
@@ -208,6 +208,7 @@
 
     <footer class="mt-16 border-t border-line pt-6 pb-8 text-xs text-muted space-y-1">
       <p>Card data: <a href="https://openrift.app" target="_blank" rel="noopener noreferrer" class="text-ink underline">OpenRift</a><span id="catalogStatus"></span></p>
+      <p>Riftbound icons: <a href="https://wiki.leagueoflegends.com/en-us/Category:RB_icons" target="_blank" rel="noopener noreferrer" class="text-ink underline">League of Legends Wiki</a> · © Riot Games</p>
       <p>Riftbound Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
     </footer>
 
@@ -250,7 +251,7 @@
           </div>
         </div>
         <p class="flex items-center justify-between text-xs pt-1">
-          <span class="text-muted">Owned</span>
+          <span id="panelPlaysetLabel" class="text-muted">Playset</span>
           <span id="panelPlaysetText" class="font-bold tabular-nums">0 / 3</span>
         </p>
       </div>
