@@ -1,5 +1,5 @@
 // @ts-nocheck -- untyped interface code; it moves to typed modules in a later step.
-import { getPlaysetTarget, summarizePlaysets } from './playsets.js';
+import { getPlaysetKey, getPlaysetTarget, summarizePlaysets } from './playsets.js';
 import { DOMAIN_ICONS, TYPE_ICONS, RARITY_ICONS, FALLBACK_ICON } from './icons.js';
 const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
 const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
@@ -158,7 +158,11 @@ function backupRecord() {
 }
 
 function getPlaysetTotal(card) {
-  return state.playsets.get(card.cardId || card.id)?.total || 0;
+  return state.playsets.get(getPlaysetKey(card))?.total || 0;
+}
+
+function getPlaysetDescription(card) {
+  return card.type === 'Rune' ? 'Normal and foil copies of this rune variant' : 'Normal and foil copies across all variants of this card';
 }
 
 function updateCardCount(cardId, field, newValue) {
@@ -247,7 +251,7 @@ function renderPlaysetDots(total, target) {
     const filled = total >= i;
     dots += `<span class="inline-block w-2 h-2 rounded-full ${filled ? 'bg-ink' : 'border border-line'}"></span>`;
   }
-  return dots;
+  return target === 10 ? `<span class="grid grid-cols-5 gap-1">${dots}</span>` : dots;
 }
 
 function renderStats() {
@@ -404,7 +408,7 @@ function renderTableRows(cards) {
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
-          <div class="inline-flex flex-col items-center gap-1" title="Normal and foil copies across all variants of this card">
+          <div class="inline-flex flex-col items-center gap-1" title="${getPlaysetDescription(card)}">
             <span class="text-xs font-bold tabular-nums ${playsetTotal >= target ? 'text-ink' : 'text-muted'}">
               ${playsetTotal} / ${target}
             </span>
@@ -498,7 +502,7 @@ function renderGridCards(cards) {
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-1 text-xs" title="Normal and foil copies across all variants of this card">
+          <div class="flex flex-wrap items-center justify-between gap-1 pt-1 text-xs" title="${getPlaysetDescription(card)}">
             <span class="text-muted">Playset <strong class="text-ink tabular-nums">${playsetTotal} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
             <div class="flex items-center gap-1">
               ${renderPlaysetDots(playsetTotal, target)}
@@ -556,6 +560,9 @@ function syncCardPanel(cardId) {
   document.getElementById('panelFinish').textContent=card.specialFinish ? card.finishes.join(' / ') : 'Normal';
   for(const [id,field] of [['panelNormalMinus','normal'],['panelNormalPlus','normal'],['panelFoilMinus','foil'],['panelFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
   document.getElementById('panelPlaysetText').textContent = `${getPlaysetTotal(card)} / ${target}`;
+  const playsetLabel = document.getElementById('panelPlaysetLabel');
+  playsetLabel.textContent = card.type === 'Rune' ? 'Playset · this variant' : 'Playset · all variants';
+  playsetLabel.title = getPlaysetDescription(card);
 
   const imgEl = document.getElementById('panelImg');
   delete imgEl.dataset.fallbackApplied;

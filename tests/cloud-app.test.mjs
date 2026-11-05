@@ -119,6 +119,50 @@ test('playsets combine normal and foil across sets and count Legends and Battlef
   }
 });
 
+test('Rune variants each require ten copies in stats, filters, grid, table and panel', async t=>{
+  const base=fullCatalog.find(c=>c.number==='OGN-007' && c.details.type==='Rune');
+  const alt=fullCatalog.find(c=>c.number==='OGN-007a' && c.details.type==='Rune');
+  assert.equal(base.card_id,alt.card_id);
+  const state=apiFixture([base,alt],[collectionRow(alice,base.id,4),{...collectionRow(alice,alt.id),foil:6}]);
+  const {w,d,text,signIn}=await app(t,state);
+  await signIn();
+  await waitFor(()=>text('statTotalCopies')==='10');
+  assert.equal(text('statPlaysets'),'0');
+  for(const [card,total] of [[base,4],[alt,6]]) {
+    const tile=d.querySelector(`#gridContainer [data-card-id="${card.id}"]`);
+    assert.match(tile.textContent,new RegExp(`Playset\\s+${total} / 10`));
+    assert.equal(tile.querySelectorAll('.rounded-full').length,10);
+    assert.equal(tile.querySelectorAll('.bg-ink').length,total);
+  }
+  w.openCardPanel(base.id);
+  assert.equal(text('panelPlaysetText'),'4 / 10');
+  assert.equal(text('panelPlaysetLabel'),'Playset · this variant');
+  d.querySelector('[data-ownership="playset"]').click();
+  assert.equal(d.querySelectorAll('#gridContainer > div').length,0);
+  await w.updateCardCount(base.id,'normal',10);
+  assert.equal(text('statPlaysets'),'1');
+  assert.equal(text('panelPlaysetText'),'10 / 10');
+  assert.equal(d.querySelectorAll('#gridContainer > div').length,1);
+  assert.equal(d.querySelector('#gridContainer > div').dataset.cardId,base.id);
+  d.querySelector('[data-ownership="incomplete"]').click();
+  assert.equal(d.querySelector('#gridContainer > div').dataset.cardId,alt.id);
+  w.openCardPanel(alt.id);
+  assert.equal(text('panelPlaysetText'),'6 / 10');
+  d.getElementById('viewBtnTable').click();
+  const row=d.querySelector('#cardTableBody tr');
+  assert.equal(row.cells[5].textContent.trim().replace(/\s+/g,' '),'6 / 10');
+  await w.updateCardCount(alt.id,'foil',10);
+  assert.equal(text('statPlaysets'),'2');
+  assert.equal(d.querySelectorAll('#cardTableBody tr').length,0);
+  d.querySelector('[data-ownership="playset"]').click();
+  assert.equal(d.querySelectorAll('#cardTableBody tr').length,2);
+  await w.adjustCardCount(base.id,'normal',-1);
+  assert.equal(text('statPlaysets'),'1');
+  assert.equal(d.querySelector('#cardTableBody tr').dataset.cardId,alt.id);
+  assert.equal(state.rows.get(`${alice}:${base.id}`).normal,9);
+  assert.equal(state.rows.get(`${alice}:${alt.id}`).foil,10);
+});
+
 test('real SDK login, online increment, lost response recovery and logout; old local data stays untouched', async t=>{
   const state=apiFixture(), {w,d,text,signIn,signedOut,legacyUntouched}=await app(t,state);
   assert.equal(text('statTotalCopies'),'0');
