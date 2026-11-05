@@ -66,6 +66,7 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `src/app.js` | Connects the interface to the data. Handles clicks, counters, filtering, rendering, statistics, images, capture, and exports. Not yet type-checked. | Change how the app behaves. |
 | `vite.config.mjs` | Vite and Tailwind build settings, development and preview server. | Change the build. |
 | `fonts/` | Self-hosted Archivo variable font (SIL Open Font License, see `OFL.txt`). | Replace or update the interface font. |
+| `assets/riftbound/` / `src/icons.ts` | Original Riftbound icons from the League of Legends Wiki, with source URLs, checksums and UI mappings. | Update game symbols; see the asset directory's attribution notes. |
 | `src/cloud.ts` | TypeScript login/session controller and account-bound Supabase clients. | Change authentication and online state transitions. |
 | `src/cloud-repository.ts` | Typed paginated catalog reads, private collection reads, atomic adjustments, and revision-checked edits. | Change online data access. |
 | `tests/cloud-repository.test.mjs` / `tests/cloud-app.test.mjs` | Exercise the real SDK against deterministic Auth/PostgREST responses: pagination, accounts, conflicts, failed writes, capture, and that old local data stays untouched. | Verify online behavior without sending email or writing real collections. |

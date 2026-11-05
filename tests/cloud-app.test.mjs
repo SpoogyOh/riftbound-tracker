@@ -8,7 +8,7 @@ import { build } from 'esbuild';
 const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
 // Bundle the same entry Vite builds; jsdom does not need the stylesheet.
 const {outputFiles}=await build({entryPoints:[fileURLToPath(new URL('../src/main.ts',import.meta.url))],bundle:true,format:'iife',
-  platform:'browser',target:'es2022',write:false,loader:{'.css':'empty'}});
+  platform:'browser',target:'es2022',write:false,loader:{'.css':'empty','.svg':'dataurl','.png':'dataurl'}});
 const sources=[outputFiles[0].text];
 async function waitFor(predicate) {
   for(let i=0;i<300;i++) { if(predicate())return; await new Promise(resolve=>setTimeout(resolve,10)); }

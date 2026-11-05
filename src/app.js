@@ -1,5 +1,6 @@
 // @ts-nocheck -- untyped interface code; it moves to typed modules in a later step.
 import { getPlaysetTarget, summarizePlaysets } from './playsets.js';
+import { DOMAIN_ICONS, TYPE_ICONS, RARITY_ICONS, FALLBACK_ICON } from './icons.js';
 const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
 const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
 
@@ -11,17 +12,6 @@ const DOMAIN_META = {
   Chaos:   { label: 'Chaos',   bg1: '#4c1d95', bg2: '#9333ea', accent: '#d8b4fe' },
   Order:   { label: 'Order',   bg1: '#7c2d12', bg2: '#ea580c', accent: '#fdba74' },
   Neutral: { label: 'Neutral', bg1: '#1e293b', bg2: '#475569', accent: '#cbd5e1' }
-};
-
-const TYPE_ICON = {
-  'Legend': '👑',
-  'Champion': '⚔️',
-  'Unit': '🛡️',
-  'Spell': '🔥',
-  'Signature Spell': '✨',
-  'Gear': '⚙️',
-  'Battlefield': '🏰',
-  'Rune': '💎'
 };
 
 const RARITY_ORDER = {
@@ -48,7 +38,7 @@ const state = {
 
 function generateCardSvgDataUri(card) {
   const d = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
-  const tIcon = TYPE_ICON[card.type] || '🃏';
+  const tIcon = TYPE_ICONS[card.type] || FALLBACK_ICON;
   const safeNumber = String(card.number || 'OGN').replace(/[<>&"']/g, '');
   const safeName = String(card.name || 'Card').replace(/[<>&"']/g, '');
   const safeType = String(card.type || 'Unit').replace(/[<>&"']/g, '');
@@ -84,7 +74,7 @@ function generateCardSvgDataUri(card) {
     <rect x="10" y="10" width="230" height="330" rx="12" fill="none" stroke="url(#frame)" stroke-width="2"/>
     <rect x="18" y="44" width="214" height="175" rx="8" fill="#090d16" fill-opacity="0.45" stroke="${d.accent}" stroke-opacity="0.35" stroke-width="1"/>
     <circle cx="125" cy="132" r="46" fill="${d.bg2}" fill-opacity="0.35" stroke="${d.accent}" stroke-opacity="0.5" stroke-width="1.5"/>
-    <text x="125" y="147" font-family="sans-serif" font-size="44" text-anchor="middle">${tIcon}</text>
+    <image x="97" y="104" width="56" height="56" href="${escapeHtml(tIcon)}"/>
     <text x="22" y="31" font-family="monospace" font-weight="bold" font-size="13" fill="${d.accent}">${safeNumber}</text>
     <text x="228" y="31" font-family="sans-serif" font-weight="bold" font-size="12" fill="#ffffff" fill-opacity="0.9" text-anchor="end">${d.label.toUpperCase()}</text>
     <rect x="18" y="232" width="214" height="94" rx="8" fill="#090d16" fill-opacity="0.72" stroke="${d.accent}" stroke-opacity="0.3" stroke-width="1"/>
@@ -122,6 +112,18 @@ function setStorageStatus(message, error = false) {
   el.classList.toggle('text-red-700', error);
 }
 function cardDomains(card) { return card.domains?.length ? card.domains : [card.domain || 'Neutral']; }
+function renderIcon(src, type = false) {
+  return src ? `<img src="${escapeHtml(src)}" width="16" height="16" alt="" aria-hidden="true" class="rb-icon${type ? ' rb-type-icon' : ''}" />` : '';
+}
+function renderDomains(card) {
+  return cardDomains(card).map(domain => `<span class="rb-label">${renderIcon(DOMAIN_ICONS[domain])}${escapeHtml(domain)}</span>`).join('<span aria-hidden="true"> / </span>');
+}
+function renderType(card) {
+  return `<span class="rb-label">${renderIcon(TYPE_ICONS[card.type], true)}${escapeHtml(card.type)}</span>`;
+}
+function renderRarity(card) {
+  return `<span class="rb-label">${renderIcon(RARITY_ICONS[card.rarity])}${escapeHtml(card.rarity)}</span>`;
+}
 function cardLabel(card) {
   return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.active === false ? ' [Archived]' : '');
 }
@@ -331,7 +333,6 @@ function renderTableRows(cards) {
     const total = normal + foil;
     const target = getPlaysetTarget(card);
     const playsetTotal = getPlaysetTotal(card);
-    const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
@@ -363,16 +364,15 @@ function renderTableRows(cards) {
           </div>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
-          <span class="inline-flex items-center gap-1.5 text-xs">
-            <span class="dot" style="background:${dMeta.bg2}"></span>
-            <span>${escapeHtml(cardDomains(card).join(' / '))}</span>
+          <span class="rb-domains text-xs">
+            ${renderDomains(card)}
           </span>
         </td>
         <td class="py-2 px-3 whitespace-nowrap">
           <div class="flex items-center gap-1.5 text-xs">
-            <span>${escapeHtml(card.type)}</span>
+            ${renderType(card)}
             <span class="text-muted">·</span>
-            <span class="text-muted">${escapeHtml(card.rarity)}</span>
+            ${renderRarity(card)}
           </div>
         </td>
         <td class="py-2 px-3">
@@ -431,7 +431,6 @@ function renderGridCards(cards) {
     const total = normal + foil;
     const target = getPlaysetTarget(card);
     const playsetTotal = getPlaysetTotal(card);
-    const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
     const imgUrl = getCardPrimaryImageUrl(card);
 
     return `
@@ -441,8 +440,8 @@ function renderGridCards(cards) {
             <h3 class="caps text-[15px] leading-tight truncate" title="${escapeHtml(cardLabel(card))}">
               ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
             </h3>
-            <p class="text-xs mt-1 flex items-center gap-1.5"><span class="dot" style="background:${dMeta.bg2}"></span>${escapeHtml(cardDomains(card).join(' / '))}</p>
-            <p class="text-xs text-muted">${escapeHtml(card.number)} · ${escapeHtml(card.type)} · ${escapeHtml(card.rarity)}</p>
+            <p class="rb-domains text-xs mt-1">${renderDomains(card)}</p>
+            <p class="text-xs text-muted flex flex-wrap items-center gap-1">${escapeHtml(card.number)} · ${renderType(card)} · ${renderRarity(card)}</p>
           </div>
           <button
             type="button"
@@ -549,7 +548,7 @@ function syncCardPanel(cardId) {
 
   document.getElementById('panelNumber').textContent = card.number;
   document.getElementById('panelName').textContent = cardLabel(card);
-  document.getElementById('panelMeta').textContent = `${cardDomains(card).join(' / ')} · ${card.type} · ${card.rarity}`;
+  document.getElementById('panelMeta').innerHTML = `${renderDomains(card)} · ${renderType(card)} · ${renderRarity(card)}`;
   document.getElementById('panelRules').textContent = [card.rulesText, card.effectText, card.flavorText].filter(Boolean).join('\n\n');
   const sourceLink=document.getElementById('panelSource');
   sourceLink.href=card.sourceUrl || 'https://openrift.app';
@@ -726,6 +725,10 @@ window.openCardPanel = openCardPanel;
 window.handleCardImageError = handleCardImageError;
 
 document.addEventListener('DOMContentLoaded', async () => {
+  for (const button of document.querySelectorAll('.domain-pill')) {
+    const icon = DOMAIN_ICONS[button.dataset.domain];
+    if (icon) button.insertAdjacentHTML('afterbegin', renderIcon(icon));
+  }
   if (window.RiftboundCloud) {
     cloud = window.RiftboundCloud.start({
       status: setStorageStatus,
