@@ -1,4 +1,5 @@
 // @ts-nocheck -- untyped interface code; it moves to typed modules in a later step.
+import { getPlaysetTarget, summarizePlaysets } from './playsets.js';
 const STORAGE_KEY_V2 = 'riftbound_card_tracker_v2';
 const STORAGE_KEY_V1 = 'riftbound_card_tracker_v1';
 
@@ -33,6 +34,7 @@ const RARITY_ORDER = {
 
 const state = {
   cards: [],
+  playsets: new Map(),
   search: '',
   ownership: 'all',
   domain: 'all',
@@ -153,9 +155,8 @@ function backupRecord() {
   return { schemaVersion: 3, savedAt: new Date().toISOString(), items };
 }
 
-function getPlaysetTarget(card) {
-  if (card.type === 'Legend' || card.type === 'Battlefield') return 1;
-  return 3;
+function getPlaysetTotal(card) {
+  return state.playsets.get(card.cardId || card.id)?.total || 0;
 }
 
 function updateCardCount(cardId, field, newValue) {
@@ -180,6 +181,7 @@ function getFilteredCards() {
   const filtered = state.cards.filter(card => {
     const total = (card.normal || 0) + (card.foil || 0);
     const target = getPlaysetTarget(card);
+    const playsetTotal = getPlaysetTotal(card);
 
     if (q) {
       const matchName = card.name.toLowerCase().includes(q);
@@ -193,8 +195,8 @@ function getFilteredCards() {
     if (state.ownership === 'owned' && total === 0) return false;
     if (state.ownership === 'foil' && (card.foil || 0) === 0) return false;
     if (state.ownership === 'missing' && total > 0) return false;
-    if (state.ownership === 'incomplete' && total >= target) return false;
-    if (state.ownership === 'playset' && total < target) return false;
+    if (state.ownership === 'incomplete' && playsetTotal >= target) return false;
+    if (state.ownership === 'playset' && playsetTotal < target) return false;
 
     if (state.domain !== 'all' && !cardDomains(card).includes(state.domain)) return false;
     if (state.set !== 'all' && card.set !== state.set) return false;
@@ -250,7 +252,6 @@ function renderStats() {
   let totalNormal = 0;
   let totalFoil = 0;
   let uniqueOwned = 0;
-  let playsets = 0;
 
   for (const c of state.cards) {
     const n = c.normal || 0;
@@ -259,7 +260,6 @@ function renderStats() {
     totalNormal += n;
     totalFoil += f;
     if (tot > 0) uniqueOwned++;
-    if (tot >= getPlaysetTarget(c)) playsets++;
   }
 
   const grandTotal = totalNormal + totalFoil;
@@ -275,6 +275,7 @@ function renderStats() {
   document.getElementById('statTotalCatalog').textContent = catalogSize.toLocaleString('en-US');
   document.getElementById('statUniquePercent').textContent = `${uniquePct}%`;
   document.getElementById('statProgressBar').style.width = `${uniquePct}%`;
+  const playsets = [...state.playsets.values()].filter(p => p.total >= p.target).length;
   document.getElementById('statPlaysets').textContent = playsets.toLocaleString('en-US');
 }
 
@@ -329,6 +330,7 @@ function renderTableRows(cards) {
     const foil = card.foil || 0;
     const total = normal + foil;
     const target = getPlaysetTarget(card);
+    const playsetTotal = getPlaysetTotal(card);
     const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
     const imgUrl = getCardPrimaryImageUrl(card);
 
@@ -402,12 +404,12 @@ function renderTableRows(cards) {
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
-          <div class="inline-flex flex-col items-center gap-1">
-            <span class="text-xs font-bold tabular-nums ${total >= target ? 'text-ink' : 'text-muted'}">
-              ${total} / ${target}
+          <div class="inline-flex flex-col items-center gap-1" title="Normal and foil copies across all variants of this card">
+            <span class="text-xs font-bold tabular-nums ${playsetTotal >= target ? 'text-ink' : 'text-muted'}">
+              ${playsetTotal} / ${target}
             </span>
             <div class="flex items-center gap-1">
-              ${renderPlaysetDots(total, target)}
+              ${renderPlaysetDots(playsetTotal, target)}
             </div>
           </div>
         </td>
@@ -428,6 +430,7 @@ function renderGridCards(cards) {
     const foil = card.foil || 0;
     const total = normal + foil;
     const target = getPlaysetTarget(card);
+    const playsetTotal = getPlaysetTotal(card);
     const dMeta = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
     const imgUrl = getCardPrimaryImageUrl(card);
 
@@ -496,10 +499,10 @@ function renderGridCards(cards) {
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-1 text-xs">
-            <span class="text-muted">Owned <strong class="text-ink tabular-nums">${total} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
+          <div class="flex items-center justify-between pt-1 text-xs" title="Normal and foil copies across all variants of this card">
+            <span class="text-muted">Playset <strong class="text-ink tabular-nums">${playsetTotal} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
             <div class="flex items-center gap-1">
-              ${renderPlaysetDots(total, target)}
+              ${renderPlaysetDots(playsetTotal, target)}
             </div>
           </div>
         </div>
@@ -542,7 +545,6 @@ function syncCardPanel(cardId) {
   if (!card) return;
   const normal = card.normal || 0;
   const foil = card.foil || 0;
-  const total = normal + foil;
   const target = getPlaysetTarget(card);
 
   document.getElementById('panelNumber').textContent = card.number;
@@ -554,7 +556,7 @@ function syncCardPanel(cardId) {
   sourceLink.classList.toggle('hidden', !card.sourceUrl);
   document.getElementById('panelFinish').textContent=card.specialFinish ? card.finishes.join(' / ') : 'Normal';
   for(const [id,field] of [['panelNormalMinus','normal'],['panelNormalPlus','normal'],['panelFoilMinus','foil'],['panelFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
-  document.getElementById('panelPlaysetText').textContent = `${total} / ${target}`;
+  document.getElementById('panelPlaysetText').textContent = `${getPlaysetTotal(card)} / ${target}`;
 
   const imgEl = document.getElementById('panelImg');
   delete imgEl.dataset.fallbackApplied;
@@ -728,12 +730,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     cloud = window.RiftboundCloud.start({
       status: setStorageStatus,
       clear() {
-        liveCatalog = null; state.cards = [];
+        liveCatalog = null; state.cards = []; state.playsets = new Map();
         closeModal(); closeCardPanel(); closeCapture();
         for (const id of ['accountMenu', 'filterPanel']) document.getElementById(id).hidePopover?.();
         renderAll();
       },
-      show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
+      show(cards, catalog) {
+        liveCatalog = catalog; state.cards = cards; state.playsets = summarizePlaysets(cards);
+        refreshCatalogControls();
+      },
       render: renderAll
     });
   }

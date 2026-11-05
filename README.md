@@ -53,7 +53,7 @@ When setting up another host, configure its app URL and email delivery in Supaba
 - Custom image URLs or uploaded images per card.
 - Online changes confirmed by the server, atomic counter increments, conflict detection for absolute edits, and an explicit reload button.
 
-Normal/foil twins share one catalog row with two counters. Alternate art, signatures, promo markers, different sizes, and special metal finishes remain separate variants. The normal/special-finish counter stores metal copies; unavailable finishes are disabled. Catalog progress counts variants rather than only distinct game cards.
+Normal/foil twins share one catalog row with two counters. Alternate art, signatures, promo markers, different sizes, and special metal finishes remain separate variants. The normal/special-finish counter stores metal copies; unavailable finishes are disabled. Catalog progress counts variants rather than only distinct game cards. Playset progress and the complete/incomplete playset filters sum normal and foil copies across all variants with the same `cardId`, including variants outside the current search or filters. The playset statistic counts each game card once (3 copies, or 1 for Legends and Battlefields). Quantity controls, ownership filters, exports and catalog progress remain per variant.
 
 ## Repository map
 
