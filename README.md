@@ -75,7 +75,6 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | `types/models.ts` | Shared TypeScript models for catalog rows, physical printings, metadata, quantities, and collection backups. | Change the data contracts as features evolve. |
 | `types/database.generated.ts` | TypeScript types generated from the deployed Supabase database. | Regenerate after applying schema migrations. |
 | `types/openrift.ts` | Expected upstream fields consumed by the importer. | Update the OpenRift input contract. |
-| `types/browser.d.ts` | Declares the two generated catalog globals on `window`. | Change how browser scripts access the catalog. |
 | `tsconfig.json` | Strict type-checking scope for the gradual migration. | Add a source file as it is migrated. |
 | `tsconfig.tools.json` | Compiles the TypeScript catalog export tool into the ignored `.cache/tools/` directory. | Change the Node.js tool build. |
 | `supabase/` | Versioned PostgreSQL schema, access policies, quantity adjustment function, and local Supabase configuration. | Evolve the central database through new migrations. |
