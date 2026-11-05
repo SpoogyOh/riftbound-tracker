@@ -21,6 +21,7 @@ import riftbound from '../assets/riftbound/RB_riftbound_icon.svg?inline';
 
 export const DOMAIN_ICONS: Readonly<Record<string, string | undefined>> = {
   Fury: fury, Calm: calm, Mind: mind, Body: body, Chaos: chaos, Order: order,
+  Neutral: riftbound,
 };
 
 export const TYPE_ICONS: Readonly<Record<string, string | undefined>> = {
