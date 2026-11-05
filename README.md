@@ -10,15 +10,20 @@ Repository documentation and development communication use English. See [AGENTS.
 
 ## Run the app
 
-The app runs over HTTP or HTTPS and needs a Supabase account; opened as a local file it only shows a notice. Serve the repository directory with Python 3:
+The app is built with [Vite](https://vite.dev) and needs Node.js 22 or newer and a Supabase account. Start the development server:
 
 ```bash
 git clone https://github.com/SpoogyOh/riftbound-tracker.git
 cd riftbound-tracker
-python3 -m http.server 8765 --bind 127.0.0.1
+npm ci
+npm run dev
 ```
 
-Open <http://127.0.0.1:8765> and sign in. Node.js and npm are needed for development commands and catalog updates, not to run the app. Styling uses Tailwind's CDN script and the self-hosted Archivo font in `fonts/`; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
+Open <http://127.0.0.1:8765> and sign in. Styling is compiled by Tailwind CSS at build time, together with the self-hosted Archivo font in `fonts/`; card images load on demand. A generated SVG placeholder is used when a card image fails to load.
+
+### Build and deploy
+
+`npm run build` writes the static site to `dist/`, with relative asset paths, so it works at a domain root or in a subfolder. Serve `dist/` from any static host; `npm run preview` serves it locally. A host that builds from the repository needs the build command `npm run build`, the output directory `dist`, and Node.js 22. The repository files themselves are not a runnable site. When the app moves to another address, add that address to the Supabase Auth URL configuration (see [docs/database.md](docs/database.md#authentication-and-first-account-test)).
 
 Your collection lives in your private Supabase account. Earlier versions also kept a separate local collection in the browser (IndexedDB/localStorage). This version no longer reads that data and never deletes it; download a JSON backup with an earlier version if you still need it.
 
@@ -55,16 +60,17 @@ Normal/foil twins share one catalog row with two counters. Alternate art, signat
 | File or directory | Responsibility | When to change it |
 | --- | --- | --- |
 | `README.md` | Project overview, setup instructions, repository map, and data-flow guide. | Explain how to use or develop the project. |
-| `index.html` | Main page structure: buttons, forms, table, grid, dialogs, and custom CSS. Design tokens (colors, type, control styles) live in its `<style>` block. Loads the shared JavaScript files. | Change the interface layout, look, or add a control. |
+| `index.html` | Main page structure: header, sign-in screen, filters, binder and list, panels and dialogs. Loads the `src/main.ts` entry. | Change the interface layout or add a control. |
+| `src/main.ts` | Vite entry: imports the styles, the session controller and the interface code. | Add a new top-level module. |
+| `src/styles.css` | Tailwind setup, design tokens (`@theme`), and the component classes (`@layer components`). | Change the look. |
+| `src/app.js` | Connects the interface to the data. Handles clicks, counters, filtering, rendering, statistics, images, capture, and exports. Not yet type-checked. | Change how the app behaves. |
+| `vite.config.mjs` | Vite and Tailwind build settings, development and preview server. | Change the build. |
 | `fonts/` | Self-hosted Archivo variable font (SIL Open Font License, see `OFL.txt`). | Replace or update the interface font. |
 | `src/cloud.ts` | TypeScript login/session controller and account-bound Supabase clients. | Change authentication and online state transitions. |
 | `src/cloud-repository.ts` | Typed paginated catalog reads, private collection reads, atomic adjustments, and revision-checked edits. | Change online data access. |
-| `cloud.js` | Generated browser bundle including the pinned Supabase SDK. | Regenerate with `npm run build:browser`; edit `src/` instead. |
-| `scripts/build-browser.mjs` | Bundles the TypeScript online client using esbuild. | Change the browser build. |
 | `tests/cloud-repository.test.mjs` / `tests/cloud-app.test.mjs` | Exercise the real SDK against deterministic Auth/PostgREST responses: pagination, accounts, conflicts, failed writes, capture, and that old local data stays untouched. | Verify online behavior without sending email or writing real collections. |
 | `tests/browser/cloud.spec.cjs` | Two isolated Chrome sessions using a shared API fixture. | Verify online controls, reload, conflicts, and logout. |
 | `tests/browser/online.cjs` | Serves the API fixture to a browser page and signs in through the sign-in screen. | Change how browser tests reach the fixture account. |
-| `app.js` | Connects the interface to the data. Handles clicks, counters, filtering, rendering, statistics, images, capture, and exports. | Change how the app behaves. |
 | `cards.js` | Generated card catalog, variant IDs, metadata, rules text, values, keywords, tags, image references, and underlying printing details. The source of the Supabase catalog import; the app loads the catalog from Supabase. | Regenerate it with the importer. |
 | `types/models.ts` | Shared TypeScript models for catalog rows, physical printings, metadata, quantities, and collection backups. | Change the data contracts as features evolve. |
 | `types/database.generated.ts` | TypeScript types generated from the deployed Supabase database. | Regenerate after applying schema migrations. |
@@ -102,16 +108,16 @@ The app loads the catalog from Supabase, which is refreshed from `cards.js` with
 
 ### Opening the app
 
-1. `index.html` loads the generated `cloud.js` client and `app.js`.
+1. `index.html` loads `src/main.ts`, which Vite bundles with the session controller (`src/cloud.ts`), the interface code (`src/app.js`) and the styles.
 2. The session controller shows the sign-in screen, or loads the signed-in account's catalog and owned quantities through the typed repository.
-3. `app.js` renders the binder or list and updates the statistics.
+3. `src/app.js` renders the binder or list and updates the statistics.
 
 ### Example: adding one normal copy
 
 1. You click `+` on a card.
-2. `app.js` asks the session controller to adjust that card's quantity.
+2. `src/app.js` asks the session controller to adjust that card's quantity.
 3. The controller calls the atomic database adjustment function and waits for the server's response.
-4. `app.js` shows the confirmed quantities and statistics, and **Saved · Supabase** appears in the header.
+4. `src/app.js` shows the confirmed quantities and statistics, and **Saved · Supabase** appears in the header.
 
 `+`/`−` and capture call the atomic database adjustment function. Direct quantity edits and image edits check the saved revision so another device's changes cannot be silently overwritten. Reload or return to the tab to fetch newer server data; there is no live subscription or offline write queue.
 
@@ -130,23 +136,25 @@ npm ci
 | `npm run catalog:update` | Refreshes the English OpenRift catalog and generates `cards.js`. |
 | `npm run build:tools` | Compiles the TypeScript Node.js export tool. |
 | `npm run catalog:sql` | Validates `cards.js` and generates `.cache/catalog-import.sql` for a trusted Supabase import. |
-| `npm run build:browser` | Bundles the TypeScript online client and pinned SDK into `cloud.js`. |
+| `npm run dev` | Starts the Vite development server at <http://127.0.0.1:8765>. |
+| `npm run build` | Builds the static site into `dist/`. |
+| `npm run preview` | Serves the built `dist/` at <http://127.0.0.1:8765>. |
 | `npm run typecheck` | Checks the shared TypeScript models, catalog normalizer, database export tool, and online client. |
 | `npm test` | Runs catalog, jsdom online-app, and PostgreSQL database tests without launching a browser. |
 | `npm run test:database` | Builds the tool and runs the database migration, access-control, and catalog import tests. |
 | `npm run test:browser` | Runs the Chrome end-to-end tests. |
 
-The browser-test configuration expects an installed Google Chrome and a `python3` executable. It starts a local server automatically, or reuses an existing server locally. The GitHub workflow runs on Ubuntu 24.04 with Chrome already installed.
+The browser-test configuration expects an installed Google Chrome. It builds the site and serves it with `vite preview`, or reuses an existing server locally. The GitHub workflow runs on Ubuntu 24.04 with Chrome already installed.
 
-After changing `src/`, regenerate `cloud.js` with `npm run build:browser`; after interface changes, run the relevant tests. After changing only documentation, check the text, commands, and file links; rebuilding the catalog is unnecessary.
+After interface changes, run the relevant tests; `dist/` is build output and is not committed. After changing only documentation, check the text, commands, and file links; rebuilding the catalog is unnecessary.
 
 ### Gradual TypeScript migration
 
 The first phase defines shared models in `types/` and checks the existing importer through JSDoc type references, including the catalog entries it constructs. Run `npm run typecheck`; the same check runs in CI. TypeScript is pinned to the JavaScript-based 6.0.3 compiler for compatibility with restricted development environments.
 
-`allowJs` and `checkJs` let checked JavaScript coexist with TypeScript. `noEmit` keeps type checking separate from compilation. New online code in `src/` is TypeScript; esbuild creates the committed browser bundle. No frontend framework is required for this step. `skipLibCheck` skips a known mismatch between the SDK's bundled WebAuthn declarations and TypeScript 6 DOM declarations; project source remains strictly checked. The large generated `cards.js` payload is outside the type-checking scope; its transformation is checked at the importer boundary. `app.js` and the tests are outside the type-checking scope until their migration phases; the collection-backup types describe the JSON backup format but do not yet check its implementation.
+`allowJs` and `checkJs` let checked JavaScript coexist with TypeScript. `noEmit` keeps type checking separate from compilation. New code in `src/` is TypeScript; Vite bundles it at build time. No frontend framework is required for this step. `skipLibCheck` skips a known mismatch between the SDK's bundled WebAuthn declarations and TypeScript 6 DOM declarations; project source remains strictly checked. The large generated `cards.js` payload is outside the type-checking scope; its transformation is checked at the importer boundary. `src/app.js` (marked `@ts-nocheck`) and the tests are outside the type-checking scope until their migration phases; the collection-backup types describe the JSON backup format but do not yet check its implementation.
 
-Next, migrate the importer implementation to TypeScript and then the interface code. Keep the generated JavaScript usable throughout. Type checking does not validate untrusted API responses or imported backups at runtime; the existing runtime checks and tests remain necessary.
+Next, migrate the importer implementation to TypeScript and then the interface code. Keep the app working after every step. Type checking does not validate untrusted API responses or imported backups at runtime; the existing runtime checks and tests remain necessary.
 
 The Supabase export tool is implemented in TypeScript (`.mts`) and compiled for Node.js by `tsconfig.tools.json`. Test commands build it automatically. The UI still uses shared JavaScript; the online controller and repository are TypeScript.
 

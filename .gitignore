@@ -3,6 +3,7 @@
 Thumbs.db
 
 .cache/
+dist/
 node_modules/
 *.tmp
 

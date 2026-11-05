@@ -18,8 +18,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build:browser
-      - run: git diff --exit-code -- cloud.js
+      - run: npm run build
       - name: Installed Chrome
         run: google-chrome --version
       - run: npm run test:browser
