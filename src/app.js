@@ -446,7 +446,7 @@ function renderGridCards(cards) {
               ${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}
             </h3>
             <p class="text-xs mt-1">${escapeHtml(card.number)}</p>
-            <p class="text-xs text-muted flex flex-wrap items-center gap-1">${renderDomains(card)} · ${renderType(card)} · ${renderRarity(card)}</p>
+            <p class="text-xs text-muted flex flex-wrap items-center gap-1">${renderType(card)} · ${renderRarity(card)}</p>
           </div>
           <button
             type="button"
