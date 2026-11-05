@@ -297,7 +297,7 @@ function renderListAndGrid() {
   const gridContainer = document.getElementById('gridContainer');
 
   if (filtered.length === 0) {
-    emptyEl.classList.remove('hidden');
+    emptyEl.classList.toggle('hidden', state.cards.length === 0);
     tableContainer.classList.add('hidden');
     gridContainer.classList.add('hidden');
     // Drop stale results too, e.g. the previous account's cards after signing out.
@@ -659,7 +659,7 @@ async function addCaptured(card) {
   capture.index = -1;
   renderCaptureCandidates();
   const ok = await adjustCardCount(card.id, finish, 1);
-  if (ok === false) return setCaptureMessage(`Not confirmed: ${label}. Check the save status and your counts.`);
+  if (ok !== true) return setCaptureMessage(`Not confirmed: ${label}. Check the save status and your counts.`);
   capture.log.unshift({ id: capture.nextId++, cardId: card.id, label, number: card.number, finish });
   renderCaptureLog();
   setCaptureMessage(`Added ${label} · ${finish}.`);
@@ -672,7 +672,7 @@ async function undoCaptured(entryId) {
   const card = state.cards.find(c => c.id === entry.cardId);
   if (card && (card[entry.finish] || 0) > 0) {
     const ok = await adjustCardCount(entry.cardId, entry.finish, -1);
-    if (ok === false) return setCaptureMessage(`Undo not confirmed: ${entry.label}. Check the save status and your counts.`);
+    if (ok !== true) return setCaptureMessage(`Undo not confirmed: ${entry.label}. Check the save status and your counts.`);
     setCaptureMessage(`Removed one ${entry.finish} ${entry.label}.`);
   } else {
     setCaptureMessage(`${entry.label} has no ${entry.finish} copies left to remove.`);
@@ -727,7 +727,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.RiftboundCloud) {
     cloud = window.RiftboundCloud.start({
       status: setStorageStatus,
-      clear() { liveCatalog = null; state.cards = []; closeModal(); closeCardPanel(); closeCapture(); renderAll(); },
+      clear() {
+        liveCatalog = null; state.cards = [];
+        closeModal(); closeCardPanel(); closeCapture();
+        for (const id of ['accountMenu', 'filterPanel']) document.getElementById(id).hidePopover?.();
+        renderAll();
+      },
       show(cards, catalog) { liveCatalog = catalog; state.cards = cards; refreshCatalogControls(); },
       render: renderAll
     });

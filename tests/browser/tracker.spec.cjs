@@ -54,6 +54,7 @@ test('signed out shows only the sign-in screen; the account collection loads, re
   await page.locator('#btnAccountMenu').click();
   await page.locator('#btnSignOut').click();
   await expect(page.locator('#signInScreen')).toBeVisible();
+  await expect(page.locator('#accountMenu')).toBeHidden();
   await expect(page.locator('#gridContainer')).toBeHidden();
   expect(await page.evaluate(()=>localStorage.getItem('riftbound_card_tracker_v2'))).toContain('Blazing Scorcher');
   expect(errors).toEqual([]);

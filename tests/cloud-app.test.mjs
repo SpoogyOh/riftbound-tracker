@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
-import { IDBFactory } from 'fake-indexeddb';
 import { apiFixture, sample, alice, bob, collectionRow } from './cloud-fixture.mjs';
 import { build } from 'esbuild';
 const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
@@ -23,7 +22,6 @@ async function app(t,state) {
   const w=dom.window,d=w.document;
   await new Promise(resolve=>d.addEventListener('DOMContentLoaded',resolve,{once:true}));
   Object.assign(w,{fetch:state.fetch,Headers,Request,Response,TextEncoder,TextDecoder,structuredClone});
-  Object.defineProperty(w,'indexedDB',{value:new IDBFactory()});
   w.localStorage.setItem('riftbound_card_tracker_v2',legacy);
   for(const source of sources) w.eval(source);
   d.dispatchEvent(new w.Event('DOMContentLoaded'));
@@ -70,6 +68,7 @@ test('a loading failure locks cloud editing; switching accounts clears the previ
   await signIn();
   await waitFor(()=>text('storageStatus').includes('Editing is locked'));
   assert.equal(text('statTotalCopies'),'0');
+  assert.ok(d.getElementById('emptyState').classList.contains('hidden'));
   assert.equal(d.querySelector('#modalCardForm button[type="submit"]').disabled,true);
   state.failRead=false;
   d.getElementById('btnCloudRefresh').click();
@@ -184,6 +183,24 @@ test('capture adds and undoes one online copy through the atomic adjustment', as
   assert.equal(state.rows.get(`${alice}:${sample.id}`).normal,0);
   assert.equal(state.calls.filter(c=>c.path.includes('/rpc/')).length,2);
   assert.ok(legacyUntouched());
+});
+
+test('capture never logs an addition that was not written, even for a stale match', async t=>{
+  const state=apiFixture(undefined,[collectionRow(alice,sample.id,998)]), {d,text,signIn}=await app(t,state);
+  await signIn();
+  await waitFor(()=>text('statTotalCopies')==='998');
+  d.getElementById('btnCapture').click();
+  const input=d.getElementById('captureInput');
+  input.value=sample.number;
+  input.dispatchEvent(new d.defaultView.Event('input'));
+  // Another device reaches the 999 limit; the listed match still shows 998.
+  const row=state.rows.get(`${alice}:${sample.id}`); row.normal=999; row.revision++;
+  d.getElementById('btnCloudRefresh').click();
+  await waitFor(()=>text('statTotalCopies')==='999');
+  input.dispatchEvent(new d.defaultView.KeyboardEvent('keydown',{key:'Enter'}));
+  await waitFor(()=>text('captureMessage').includes('Not confirmed'));
+  assert.equal(text('captureCount'),'0');
+  assert.equal(state.calls.filter(c=>c.path.includes('/rpc/')).length,0);
 });
 
 test('registration waits for email confirmation and clears the password without signing in', async t=>{
