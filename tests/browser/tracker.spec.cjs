@@ -175,7 +175,9 @@ test('binder is the default view; filters sit in a sidebar on desktop and a shee
   expect(await tiles.count()).toBeLessThan(1894);
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-domain="Fury"]')).toBeHidden();
-  await expect(tiles.first()).toContainText('Fury');
+  // Tiles no longer print the domain, so check the first result against the catalog.
+  const firstId=await tiles.first().getAttribute('data-card-id');
+  expect(fixture.fullCatalog.find(c=>c.id===firstId).details.domains).toContain('Fury');
 });
 
 test('card panel stays beside the binder: arrows browse, counts save, Esc closes',async({page})=>{
