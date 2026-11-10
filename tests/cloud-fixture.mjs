@@ -15,13 +15,15 @@ export function session(userId = alice) {
   const access_token = `${encode({alg:'HS256',typ:'JWT'})}.${encode({sub:userId,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})}.test`;
   return { user, access_token, refresh_token: `test-${userId}`, token_type: 'bearer', expires_in: 3600 };
 }
-export function collectionRow(userId = alice, id = sample.id, normal = 0) {
-  return { user_id: userId, variant_id: id, normal, foil: 0, image_override: null, revision: 0, updated_at: new Date().toISOString() };
+export function collectionRow(userId = alice, id = sample.id, normal = 0, language = 'EN') {
+  return { user_id: userId, variant_id: id, language, normal, foil: 0, image_override: null, revision: 0, updated_at: new Date().toISOString() };
 }
+/** English rows keep the `user:variant` key; other languages append their code. */
+export const rowKey = (userId, id, language = 'EN') => `${userId}:${id}${language === 'EN' ? '' : `:${language}`}`;
 
 /** A deterministic Auth/PostgREST wire fixture, not a substitute for PostgreSQL RLS tests. */
 export function apiFixture(catalog = [{...sample, active:true}], initial = []) {
-  const state = { catalog, rows: new Map(initial.map(row => [`${row.user_id}:${row.variant_id}`, structuredClone(row)])),
+  const state = { catalog, rows: new Map(initial.map(row => [rowKey(row.user_id, row.variant_id, row.language), structuredClone(row)])),
     calls: [], loseWrite: false, failRead: false, pause: null, pauseWrite: null };
   state.fetch = async (input, init = {}) => {
     const url = new URL(String(input)), method = init.method || 'GET', headers = new Headers(init.headers);
@@ -47,8 +49,9 @@ export function apiFixture(catalog = [{...sample, active:true}], initial = []) {
       return json(rows.slice(offset, offset + Math.min(400, Number(query.get('limit') || 1000))));
     }
     if (path.endsWith('/rpc/adjust_collection_quantity')) {
-      const key = `${userId}:${body.p_variant_id}`;
-      const row = state.rows.get(key) || collectionRow(userId, body.p_variant_id);
+      const language = body.p_language ?? 'EN';
+      const key = rowKey(userId, body.p_variant_id, language);
+      const row = state.rows.get(key) || collectionRow(userId, body.p_variant_id, 0, language);
       row[body.p_finish] += body.p_delta; row.revision++;
       state.rows.set(key, row);
       if (state.pauseWrite) await state.pauseWrite;
@@ -58,12 +61,12 @@ export function apiFixture(catalog = [{...sample, active:true}], initial = []) {
     if (path.endsWith('/collection_items')) {
       let row;
       if (method === 'POST') {
-        const key = `${body.user_id}:${body.variant_id}`;
+        const key = rowKey(body.user_id, body.variant_id, body.language);
         if (state.rows.has(key)) return json({code:'23505',message:'Duplicate'},409);
-        row = {...collectionRow(body.user_id, body.variant_id), ...body};
+        row = {...collectionRow(body.user_id, body.variant_id, 0, body.language), ...body};
         state.rows.set(key,row);
       } else if (method === 'PATCH') {
-        const key = `${query.get('user_id')?.slice(3)}:${query.get('variant_id')?.slice(3)}`;
+        const key = rowKey(query.get('user_id')?.slice(3), query.get('variant_id')?.slice(3), query.get('language')?.slice(3));
         row = state.rows.get(key);
         if (!row || row.revision !== Number(query.get('revision')?.slice(3))) return json([]);
         Object.assign(row, body); row.revision++;

@@ -1,7 +1,7 @@
 name: Tracker browser test
 on:
   push:
-    branches: [codex/openrift-catalog]
+    branches: [main]
   pull_request:
 permissions:
   contents: read

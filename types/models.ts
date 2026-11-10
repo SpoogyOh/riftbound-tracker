@@ -72,6 +72,10 @@ export interface CatalogEntry extends CollectionQuantities {
   imageUrl: string;
   finishes: string[];
   specialFinish: boolean;
+  /** Language codes this variant was printed in, primary first. Absent in catalogs imported before languages: English. */
+  languages?: string[];
+  /** Printed name and image of the non-primary languages. */
+  localized?: Record<string, { name: string; imageUrl: string }>;
   preview: boolean;
   rulesText: string;
   effectText: string;
@@ -104,9 +108,10 @@ export interface NormalizedCatalog {
   metadata: CatalogMetadata;
 }
 
-/** Compact catalog-backed entry in a JSON backup written by app.js. */
+/** Compact catalog-backed entry in a JSON backup written by app.js: one per variant and language. */
 export interface SavedCatalogEntry extends CollectionQuantities {
   id: string;
+  language: string;
   source: 'OpenRift';
   sourcePrintingIds?: string[];
   name: string;
@@ -125,7 +130,7 @@ export interface SavedCustomEntry extends CollectionQuantities {
 }
 
 export interface CollectionBackup {
-  schemaVersion: 3;
+  schemaVersion: 4;
   savedAt: string;
   items: (SavedCatalogEntry | SavedCustomEntry)[];
 }

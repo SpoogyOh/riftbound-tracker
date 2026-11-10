@@ -11,7 +11,8 @@ Supabase is the selected backend. Start with a shared catalog and one private co
 - API URL: `https://jhleumwhywdurherakml.supabase.co`.
 - Hosted test app: <https://riftbound-tracker-test.opiola-daniel.chatgpt.site/>.
 - Applied migration: `20261029164445_initial_catalog_and_collection.sql`. The filename matches the version recorded by Supabase; its SQL is unchanged from the reviewed initial migration.
-- Database types: `types/database.generated.ts`, generated from the deployed schema.
+- Not yet applied: `20261110150000_collection_languages.sql` (see [Card languages](#card-languages)).
+- Database types: `types/database.generated.ts`, generated from the deployed schema. The `language` column and the `p_language` argument were added by hand; regenerate the file after applying the language migration.
 
 The catalog contains 1,894 active variants from the bundled OpenRift snapshot dated `2026-10-28T11:08:40.770Z`: 1,100 distinct game cards and 2,491 distinct English printing IDs. All imported fields were compared to the expected rows using PostgreSQL JSONB equality, with zero mismatches. Collection items and Auth users were empty at the 2026-10-29 import verification; this is a historical snapshot, not the current account or collection count. RLS is enabled, anonymous catalog reads are denied, and authenticated catalog writes are denied.
 
@@ -27,11 +28,30 @@ The initial migration has now been deployed. Add a new migration for subsequent 
 | --- | --- | --- |
 | `auth.users` | Supabase-managed identities. Referenced by UUID; passwords are never stored in application tables. | Managed by Supabase Auth. |
 | `public.catalog_variants` | One row per existing tracker variant, preserving `openrift-*` IDs. Normal/foil twins share a variant. | Authenticated users read; a trusted import process writes. |
-| `public.collection_items` | Normal/foil quantities and optional image override, keyed by `(user_id, variant_id)`. | Each signed-in user manages only their own rows. |
+| `public.collection_items` | Normal/foil quantities and optional image override, keyed by `(user_id, variant_id, language)`. | Each signed-in user manages only their own rows. |
 
 Catalog columns hold the ID, underlying card ID, name, collector number, set, available finishes, active state, and import timestamp. Additional catalog fields belong in `details` (a JSON object), including provider printing IDs, image references, domains, rules, and other game metadata. This is not a direct copy of the browser `CatalogEntry` shape: the typed adapter maps the database columns and details explicitly.
 
 Owned quantities remain separate from the shared catalog. Missing catalog variants should be archived with `active = false`, not deleted; the foreign key blocks deletion of an owned variant. Existing quantities can still be reduced on archived variants.
+
+## Card languages
+
+`20261110150000_collection_languages.sql` adds `collection_items.language` (default `EN`) and makes the primary key `(user_id, variant_id, language)`. Existing rows become English copies; quantities, images and revisions are unchanged. Each language row has its own revision and image override.
+
+- `adjust_collection_quantity` gains `p_language`, defaulting to `EN`. A call with three arguments still works, so the app version deployed before the migration keeps working until the new one is live.
+- The collection trigger rejects copies in a language the variant does not list in `details.languages`. A variant without that list (imported before languages were tracked) is English only.
+- The trigger also rejects a new or changed `image_override` longer than 400,000 characters. Rows that already hold a larger image keep it and stay editable; the app scales uploads down before saving.
+- The catalog table does not change. The importer writes `languages` (primary language first) and `localized` (printed name and image of the other languages) into `details`.
+- A catalog import that would drop a language somebody owns copies in aborts, like a dropped finish.
+
+Deploy in this order:
+
+1. Apply the migration (`supabase db push`). The currently deployed app keeps working.
+2. Deploy the app. A build with card languages cannot read a database without the `language` column.
+3. Refresh the catalog with every language and import it: `npm run catalog:update`, then `npm run catalog:sql` and apply the generated SQL. The generated SQL reads `collection_items.language`, so it needs step 1. Until this step the catalog is English only and the app shows no language controls.
+4. Regenerate `types/database.generated.ts`.
+
+The language migration and the multi-language import were tested with PGlite and the fixtures only. They have not been applied to the hosted project, and the importer has not yet run against a real multi-language OpenRift response; check the per-language table it prints.
 
 ## Catalog import and refresh
 
@@ -56,7 +76,7 @@ Optional input/output paths are supported:
 npm run catalog:sql -- --input cards.js --output .cache/catalog-import.sql
 ```
 
-The generated SQL runs as one atomic `DO` statement. It serializes refreshes with an advisory lock and briefly blocks collection writes while checking compatibility. It upserts by the existing variant IDs, reactivates returning variants, and archives missing OpenRift variants. It never deletes variants or updates owned quantities. Changes to the identity or available finishes of an owned variant abort the import for review. Repeat imports preserve the same identities, data and quantities; `imported_at` records the latest refresh.
+The generated SQL runs as one atomic `DO` statement. It serializes refreshes with an advisory lock and briefly blocks collection writes while checking compatibility. It upserts by the existing variant IDs, reactivates returning variants, and archives missing OpenRift variants. It never deletes variants or updates owned quantities. Changes to the identity, available finishes or available languages of an owned variant abort the import for review. Repeat imports preserve the same identities, data and quantities; `imported_at` records the latest refresh.
 
 The database rows retain the application fields, rules, images, provider printing IDs, `printingSizes`, and the source timestamp (`details.catalogImportedAt`). Personal counts and the duplicated raw `printings` objects are excluded. Full printing details remain in the bundled source and importer cache. The online adapter loads size summaries and includes archived variants referenced by collection rows. A future local-backup importer must use `printingSizes` where legacy matching previously inspected raw printing objects.
 
@@ -67,7 +87,7 @@ The exporter prints counts and a SHA-256 of the normalized row payload. The firs
 - Counts are integers between 0 and 999, matching the existing backup validator.
 - Normal and foil quantities must match the variant's available finishes. Metal variants continue using the current normal/special-finish counter.
 - A trigger sets `updated_at` and increments `revision` on collection updates. The online absolute-value editor uses `revision` as an optimistic concurrency condition and detects zero updated rows.
-- `adjust_collection_quantity(p_variant_id, p_finish, p_delta)` changes one catalog-backed quantity using an atomic SQL update. It derives the owner from `auth.uid()`, runs with caller permissions, and remains subject to RLS. Negative or overflowing results fail and roll back.
+- `adjust_collection_quantity(p_variant_id, p_finish, p_delta, p_language)` changes one catalog-backed quantity of one language using an atomic SQL update. It derives the owner from `auth.uid()`, runs with caller permissions, and remains subject to RLS. Negative or overflowing results fail and roll back.
 - A delta is not idempotent: after a timeout, read the stored result before deciding whether to repeat it. Do not automatically retry an uncertain increment.
 - Direct catalog writes are reserved for the trusted importer. Before changing a variant's identity or finish availability, check affected quantities; a catalog metadata update does not automatically revalidate existing rows or remap them.
 
@@ -130,7 +150,7 @@ Before registering:
 
 The connector does not expose hosted Auth configuration updates, so these dashboard settings are documented. Password recovery UI, cloud backup restore and local-to-cloud transfer are follow-ups. Existing backups/custom or unresolved cards must remain intact until a transactional importer can report unsupported entries before writing.
 
-The online UI waits for write confirmation. Button adjustments and capture additions or undos use the existing atomic RPC with SDK retries explicitly disabled. Absolute edits and image changes use revision-conditional updates or conflict-detecting first inserts. Old edit dialogs are invalidated after a refresh. After a failed/uncertain write, the controller reads the server state; if that read also fails, editing stays locked. Refresh on tab return or use the reload button; there is no live subscription or offline write queue.
+The online UI waits for write confirmation. Button adjustments and capture additions or undos use the existing atomic RPC with SDK retries explicitly disabled. Absolute edits and image changes use revision-conditional updates or conflict-detecting first inserts. Old edit dialogs are invalidated after a refresh. After a failed/uncertain write, the controller reads the server state; if that read also fails, editing stays locked. Refresh on tab return or use the reload button; there is no live subscription or offline write queue. A tab return and a recovery read fetch only the collection; the catalog is read once per page load, on the reload button, and when a collection row refers to a variant the loaded catalog does not contain.
 
 ### Hosted test verification
 

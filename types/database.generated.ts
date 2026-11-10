@@ -1,4 +1,6 @@
 // Generated from the deployed Supabase schema. Regenerate after applying migrations.
+// The `language` column and `p_language` argument were added by hand to match
+// 20261110150000_collection_languages.sql; regenerate once that migration is deployed.
 export type Json =
   | string
   | number
@@ -58,6 +60,7 @@ export type Database = {
         Row: {
           foil: number
           image_override: string | null
+          language: string
           normal: number
           revision: number
           updated_at: string
@@ -67,6 +70,7 @@ export type Database = {
         Insert: {
           foil?: number
           image_override?: string | null
+          language?: string
           normal?: number
           revision?: number
           updated_at?: string
@@ -76,6 +80,7 @@ export type Database = {
         Update: {
           foil?: number
           image_override?: string | null
+          language?: string
           normal?: number
           revision?: number
           updated_at?: string
@@ -98,10 +103,16 @@ export type Database = {
     }
     Functions: {
       adjust_collection_quantity: {
-        Args: { p_delta: number; p_finish: string; p_variant_id: string }
+        Args: {
+          p_delta: number
+          p_finish: string
+          p_language?: string
+          p_variant_id: string
+        }
         Returns: {
           foil: number
           image_override: string | null
+          language: string
           normal: number
           revision: number
           updated_at: string

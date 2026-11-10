@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { readFile } = require('node:fs/promises');
+const zlib = require('node:zlib');
 const { routeApi, signIn } = require('./online.cjs');
 
 // Each test signs in to a fresh fixture account that serves the full bundled catalog.
@@ -48,8 +49,9 @@ test('signed out shows only the sign-in screen; the account collection loads, re
   await page.locator('#btnAccountMenu').click();
   await page.locator('#btnExportJSON').click();
   const json=JSON.parse(await readFile(await (await downloaded).path(),'utf8'));
-  expect(json.schemaVersion).toBe(3);
+  expect(json.schemaVersion).toBe(4);
   expect(json.items).toHaveLength(1);
+  expect(json.items[0].language).toBe('EN');
   expect(json.items[0].normal+json.items[0].foil).toBe(5);
   await page.locator('#btnAccountMenu').click();
   await page.locator('#btnSignOut').click();
@@ -108,6 +110,7 @@ test('variant selection, finish limits, filter reset and CSV',async({page})=>{
   await page.locator('#btnExportCSV').click();
   const csv=await readFile(await (await downloaded).path(),'utf8');
   expect(csv).toContain('Varianten_ID');
+  expect(csv.split('\n')[0]).toMatch(/;Sprache$/);
   expect(csv).toContain('openrift-');
 });
 
@@ -175,7 +178,9 @@ test('binder is the default view; filters sit in a sidebar on desktop and a shee
   expect(await tiles.count()).toBeLessThan(1894);
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-domain="Fury"]')).toBeHidden();
-  await expect(tiles.first()).toContainText('Fury');
+  // Tiles no longer print the domain, so check the first result against the catalog.
+  const firstId=await tiles.first().getAttribute('data-card-id');
+  expect(fixture.fullCatalog.find(c=>c.id===firstId).details.domains).toContain('Fury');
 });
 
 test('card panel stays beside the binder: arrows browse, counts save, Esc closes',async({page})=>{
@@ -235,4 +240,57 @@ test('capture adds one copy per Enter, ignores unknown input, and undoes',async(
   await expect(page.locator('#capturePanel')).toBeHidden();
   await page.locator('#btnCapture').click();
   await expect(page.locator('#captureLog li')).toHaveCount(0);
+});
+
+/** A valid PNG of random pixels, large enough that it must be scaled down before it is stored. */
+function noisePng(width, height) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]), head = Buffer.alloc(4), crc = Buffer.alloc(4);
+    head.writeUInt32BE(data.length); crc.writeUInt32BE(zlib.crc32(body));
+    return Buffer.concat([head, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header.set([8, 2, 0, 0, 0], 8);
+  const pixels = require('node:crypto').randomBytes(height * (width * 3 + 1));
+  for (let y = 0; y < height; y++) pixels[y * (width * 3 + 1)] = 0;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', zlib.deflateSync(pixels)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+test('language tabs switch counters, names and card images; an uploaded photo is scaled down',async({page})=>{
+  // Origins is also printed in French here, with its own name and image.
+  api.catalog=fixture.fullCatalog.map(row=>row.set_code!=='OGN'?row:{...row,details:{...row.details,languages:['EN','FR'],
+    localized:{FR:{name:`${row.name} FR`,imageUrl:row.details.imageUrl.replace('/media/cards/','/media/cards/fr-')}}}});
+  await ready(page);
+  await page.locator('#searchInput').fill('Blazing Scorcher');
+  const tile=page.locator('#gridContainer > div').first();
+  const id=await tile.getAttribute('data-card-id');
+  await expect(tile.locator('.card-aspect img')).not.toHaveAttribute('src',/\/fr-/);
+  await page.locator('#languageTabs [data-language="FR"]').click();
+  await expect(tile.locator('h3')).toContainText('Blazing Scorcher FR');
+  await expect(tile.locator('.card-aspect img')).toHaveAttribute('src',/\/media\/cards\/fr-/);
+  await tile.locator('button.step').filter({hasText:'＋'}).first().click();
+  await expect(page.locator('#statTotalCopies')).toHaveText('1');
+  await expect(tile.locator('input.count').first()).toHaveValue('1');
+  // The clicked button keeps the keyboard focus although its card was drawn again.
+  await expect(tile.locator('button.step').filter({hasText:'＋'}).first()).toBeFocused();
+  expect(api.rows.get(fixture.rowKey(fixture.alice,id,'FR')).normal).toBe(1);
+  await page.locator('#languageTabs [data-language="EN"]').click();
+  await expect(tile.locator('input.count').first()).toHaveValue('0');
+  await expect(tile).toContainText('Also FR 1');
+  await page.reload();
+  await expect(page.locator('#storageStatus')).toContainText('Online collection loaded');
+  await expect(page.locator('#languageTabs [data-language="EN"]')).toHaveAttribute('aria-pressed','true');
+
+  await page.locator('#searchInput').fill('Blazing Scorcher');
+  await tile.locator('button[title="Edit card & image"]').click();
+  const photo=noisePng(1500,2100);
+  expect(photo.length).toBeGreaterThan(5_000_000);
+  await page.locator('#modalImageFile').setInputFiles({name:'photo.png',mimeType:'image/png',buffer:photo});
+  await expect(page.locator('#modalImageUrl')).toHaveValue(/^data:image\/jpeg;base64,/);
+  expect((await page.locator('#modalImageUrl').inputValue()).length).toBeLessThan(400000);
+  await page.locator('#modalCardForm button[type="submit"]').click();
+  await expect(page.locator('#cardModal')).toBeHidden();
+  await expect(tile.locator('.card-aspect img')).toHaveAttribute('src',/^data:image\/jpeg/);
+  expect(await tile.locator('.card-aspect img').evaluate(img=>[img.naturalWidth,img.naturalHeight])).toEqual([429,600]);
+  expect(api.rows.get(fixture.rowKey(fixture.alice,id)).image_override.length).toBeLessThan(400000);
 });
