@@ -39,13 +39,19 @@ export function catalogRows(catalog: NormalizedCatalog): CatalogInsert[] {
       if (typeof id !== 'string' || !id || printingIds.has(id)) throw new Error(`Invalid or duplicate printing: ${id}`);
       printingIds.add(id);
     }
+    // Catalogs generated before languages were tracked are English only.
+    const languages = card.languages ?? ['EN'];
+    if (!Array.isArray(languages) || !languages.length || new Set(languages).size !== languages.length
+      || languages.some(language => typeof language !== 'string' || !/^[A-Z]{2,3}$/.test(language))) {
+      throw new Error(`Invalid languages: ${card.id}`);
+    }
     const localPrintings = new Set(card.printings.map(printing => printing.id));
     const printingFinishes = new Set(card.printings.map(printing => printing.finish));
     if (localPrintings.size !== card.sourcePrintingIds.length
       || card.sourcePrintingIds.some(id => !localPrintings.has(id))
       || printingFinishes.size !== card.finishes.length || card.finishes.some(finish => !printingFinishes.has(finish))
       || card.specialFinish !== card.finishes.every(finish => !['normal', 'foil'].includes(finish))
-      || card.printings.some(printing => printing.cardId !== card.cardId || printing.language !== 'EN'
+      || card.printings.some(printing => printing.cardId !== card.cardId || !languages.includes(printing.language)
         || typeof printing.size !== 'string' || !printing.size)) {
       throw new Error(`Printing details do not match: ${card.id}`);
     }
@@ -83,13 +89,15 @@ begin
   if exists (
     select 1 from public.collection_items owned
     join public.catalog_variants previous on previous.id = owned.variant_id
-    join jsonb_to_recordset(incoming) as next(id text, card_id text, finishes text[], special_finish boolean)
+    join jsonb_to_recordset(incoming) as next(id text, card_id text, finishes text[], special_finish boolean, details jsonb)
       on next.id = owned.variant_id
     where previous.card_id is distinct from next.card_id
       or (owned.normal > 0 and not next.special_finish and not ('normal' = any(next.finishes)))
       or (owned.foil > 0 and not ('foil' = any(next.finishes)))
+      or ((owned.normal > 0 or owned.foil > 0)
+        and not (coalesce(next.details -> 'languages', '["EN"]'::jsonb) ? owned.language))
   ) then
-    raise exception 'Catalog changes conflict with owned variants or finishes; review before importing.'
+    raise exception 'Catalog changes conflict with owned variants, finishes or languages; review before importing.'
       using errcode = '23514';
   end if;
 

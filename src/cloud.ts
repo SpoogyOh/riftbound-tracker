@@ -17,9 +17,14 @@ function accountClient(userId: string) {
 }
 
 interface Bridge {
+  /** New data; a full render follows. */
   show(cards: CloudCard[], catalog: CloudCard[]): void;
+  /** One variant's quantities changed: only its results need updating. */
+  changed(cards: CloudCard[], id: string): void;
   clear(): void;
   render(): void;
+  /** Only the lock state changed. */
+  lock(): void;
   status(message: string, error?: boolean): void;
 }
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -39,7 +44,7 @@ class CloudController {
     element('authForm').addEventListener('submit', event => { event.preventDefault(); void this.authenticate(false); });
     element('btnSignUp').addEventListener('click', () => { void this.authenticate(true); });
     element('btnSignOut').addEventListener('click', () => { void this.signOut(); });
-    element('btnCloudRefresh').addEventListener('click', () => { void this.refresh(); });
+    element('btnCloudRefresh').addEventListener('click', () => { void this.refresh(true); });
     // Schedule API work outside the Auth callback to avoid holding the session lock.
     client.auth.onAuthStateChange((_event, session) => { this.sessionChanged(session); });
     document.addEventListener('visibilitychange', () => {
@@ -77,13 +82,14 @@ class CloudController {
     }, 0);
   }
 
-  async refresh(): Promise<void> {
+  /** Tab returns and recovery reads fetch only the collection; the reload button also fetches the catalog. */
+  async refresh(reloadCatalog = false): Promise<void> {
     const repository = this.repository, generation = this.generation;
     if (!repository || this.busy) return;
-    this.busy = true; this.ready = false; this.bridge.render();
+    this.busy = true; this.ready = false; this.bridge.lock();
     this.bridge.status('Loading online collection…');
     try {
-      const cards = await repository.load();
+      const cards = await repository.load(reloadCatalog);
       if (generation !== this.generation) return;
       this.catalog = repository.catalog;
       this.bridge.show(cards, repository.catalog);
@@ -97,27 +103,28 @@ class CloudController {
     }
   }
 
-  editToken(id: string): string { return `${this.generation}:${this.repository?.revision(id) ?? 'new'}`; }
+  editToken(id: string, language: string): string { return `${this.generation}:${this.repository?.revision(id, language) ?? 'new'}`; }
 
-  async change(id: string, edit: Partial<Edit> | { finish: 'normal' | 'foil'; delta: number }, token?: string): Promise<boolean> {
+  async change(id: string, language: string, edit: Partial<Edit> | { finish: 'normal' | 'foil'; delta: number }, token?: string): Promise<boolean> {
     if (this.mode !== 'cloud' || this.locked || !this.repository) return false;
-    if (token !== undefined && token !== this.editToken(id)) {
+    if (token !== undefined && token !== this.editToken(id, language)) {
       this.bridge.status('The collection was reloaded in the meantime. Close the dialog and edit the current values again.', true);
       return false;
     }
     const repository = this.repository, generation = this.generation;
-    this.busy = true; this.bridge.render(); this.bridge.status('Saving online…');
+    let reloaded = false;
+    this.busy = true; this.bridge.lock(); this.bridge.status('Saving online…');
     try {
-      if ('finish' in edit) await repository.adjust(id, edit.finish, edit.delta);
-      else await repository.edit(id, edit);
+      if ('finish' in edit) await repository.adjust(id, language, edit.finish, edit.delta);
+      else await repository.edit(id, language, edit);
       if (generation !== this.generation) return false;
-      this.bridge.show(repository.cards(), repository.catalog);
+      this.bridge.changed(repository.cards(), id);
       this.bridge.status('Saved · Supabase');
       return true;
     } catch {
       if (generation !== this.generation) return false;
       // Read after any uncertain response; never replay an increment or overwrite a conflict.
-      this.ready = false;
+      this.ready = false; reloaded = true;
       try {
         const cards = await repository.load();
         if (generation !== this.generation) return false;
@@ -130,7 +137,7 @@ class CloudController {
       }
       return false;
     } finally {
-      if (generation === this.generation) { this.busy = false; this.bridge.render(); }
+      if (generation === this.generation) { this.busy = false; if (reloaded) this.bridge.render(); else this.bridge.lock(); }
     }
   }
 

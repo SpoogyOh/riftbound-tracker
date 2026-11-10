@@ -80,6 +80,8 @@
   #filterPanel::backdrop { background: rgba(0, 0, 0, .4); }
   /* Card panel: the open card is marked in the results; on desktop the page makes room for the panel. */
   [data-card-id] { scroll-margin-top: 5rem; scroll-margin-bottom: 1rem; }
+  /* Cards outside the viewport are laid out and painted only when scrolled to. */
+  #gridContainer > [data-card-id] { content-visibility: auto; contain-intrinsic-size: auto 14rem auto 28rem; }
   div.is-active { box-shadow: inset 0 0 0 2px var(--color-ink); }
   tr.is-active { background: var(--color-soft); }
   /* Capture drawer: the dialog's own display rules stay intact, so it only shows while open. */
@@ -152,3 +154,5 @@
 body:not([data-session="signed-in"]) .when-signed-in,
 body:not([data-session="signed-out"]) .when-signed-out { display: none !important; }
 @media (min-width: 1024px) { body.panel-open { padding-right: 26rem; } }
+/* Editing lock from src/app.js while the collection loads or could not be loaded. */
+body[data-locked] :is(.step, .count) { pointer-events: none; opacity: .35; }

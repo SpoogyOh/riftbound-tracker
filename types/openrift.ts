@@ -30,4 +30,6 @@ export interface OpenRiftCatalog {
   sets: OpenRiftSet[];
   cards: Record<string, OpenRiftCard>;
   printings: Record<string, PrintingDetails>;
+  /** Display order of the language codes; optional so older cached responses still import. */
+  enums?: { languages?: { slug: string; sortOrder: number }[] };
 }

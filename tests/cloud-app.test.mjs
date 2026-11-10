@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
-import { apiFixture, sample, fullCatalog, alice, bob, collectionRow } from './cloud-fixture.mjs';
+import { apiFixture, sample, fullCatalog, alice, bob, collectionRow, rowKey } from './cloud-fixture.mjs';
 import { build } from 'esbuild';
 const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
 // Bundle the same entry Vite builds; jsdom does not need the stylesheet.
@@ -171,6 +171,9 @@ test('real SDK login, online increment, lost response recovery and logout; old l
   await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
   assert.equal(d.querySelectorAll('#gridContainer > div').length,1);
   assert.equal(text('statTotalCopies'),'0');
+  // An English-only catalog shows no language controls.
+  assert.equal(d.getElementById('languageFilter').hidden,true);
+  assert.equal(d.getElementById('captureLanguageRow').hidden,true);
   await w.adjustCardCount(sample.id,'normal',1);
   assert.equal(text('statTotalCopies'),'1');
   assert.ok(legacyUntouched());
@@ -339,4 +342,103 @@ test('registration waits for email confirmation and clears the password without 
   assert.equal(d.body.dataset.session,'signed-out');
   assert.equal(text('statTotalCopies'),'0');
   assert.equal(state.calls.filter(c=>c.path.startsWith('/rest/')).length,0);
+});
+
+test('counters, names and images follow the selected language; totals, playsets and ownership count every language', async t=>{
+  const both={...sample,active:true,details:{...sample.details,languages:['EN','FR'],
+    localized:{FR:{name:'Nom Français',imageUrl:'https://openrift.app/media/cards/fr-400w.webp'}}}};
+  const english={...sample,id:`openrift-${'c'.repeat(32)}`,card_id:'another-card',name:'English only',number:'ZZZ-001',active:true};
+  const state=apiFixture([both,english],[collectionRow(alice,both.id,2)]);
+  const {w,d,text,signIn}=await app(t,state);
+  await signIn();
+  await waitFor(()=>text('statTotalCopies')==='2');
+  const tile=id=>d.querySelector(`#gridContainer [data-card-id="${id}"]`);
+  const counts=id=>[...tile(id).querySelectorAll('input.count')].map(input=>input.value);
+  assert.equal(d.getElementById('languageFilter').hidden,false);
+  assert.deepEqual([...d.querySelectorAll('#languageTabs [data-language]')].map(b=>b.textContent),['EN','FR']);
+  assert.deepEqual(counts(both.id),['2','0']);
+  assert.doesNotMatch(tile(both.id).textContent,/Also/);
+
+  d.querySelector('#languageTabs [data-language="FR"]').click();
+  assert.equal(w.localStorage.getItem('riftbound_tracker_language'),'FR');
+  assert.deepEqual(counts(both.id),['0','0']);
+  assert.match(tile(both.id).textContent,/Nom Français/);
+  assert.match(tile(both.id).textContent,/Also EN 2/);
+  assert.match(tile(both.id).textContent,/Playset\s+2 \/ 3/);
+  assert.equal(tile(both.id).querySelector('.card-aspect img').getAttribute('src'),'https://openrift.app/media/cards/fr-400w.webp');
+  // Owned in another language: still shown as owned, and still counted.
+  assert.equal(tile(both.id).querySelector('.card-unowned-img'),null);
+  assert.equal(text('statTotalCopies'),'2');
+  // A variant that was not printed in French cannot be counted in French and keeps its English name and image.
+  assert.ok([...tile(english.id).querySelectorAll('button.step, input.count')].every(control=>control.disabled));
+  assert.match(tile(english.id).textContent,/English only/);
+
+  // A change replaces only the changed card.
+  const untouched=tile(english.id);
+  await w.adjustCardCount(both.id,'foil',1);
+  assert.equal(tile(english.id),untouched);
+  assert.deepEqual(counts(both.id),['0','1']);
+  assert.equal(text('statTotalCopies'),'3');
+  assert.equal(state.rows.get(rowKey(alice,both.id,'FR')).foil,1);
+  assert.equal(state.rows.get(rowKey(alice,both.id)).normal,2);
+  assert.equal(await w.adjustCardCount(english.id,'normal',1),undefined);
+
+  // Capture finds the French name and adds a French copy; undo removes it in French too.
+  d.getElementById('btnCapture').click();
+  assert.equal(d.getElementById('captureLanguageRow').hidden,false);
+  const input=d.getElementById('captureInput');
+  input.value='nom français'; input.dispatchEvent(new w.Event('input'));
+  input.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter'}));
+  await waitFor(()=>text('captureCount')==='1');
+  assert.match(text('captureLog'),/FR \+1/);
+  assert.equal(state.rows.get(rowKey(alice,both.id,'FR')).normal,1);
+  input.value='ZZZ-001'; input.dispatchEvent(new w.Event('input'));
+  input.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter'}));
+  assert.match(text('captureMessage'),/not printed in FR/);
+  d.querySelector('#captureLanguages [data-language="EN"]').click();
+  d.querySelector('#captureLog [data-undo]').click();
+  await waitFor(()=>text('captureCount')==='0');
+  assert.equal(state.rows.get(rowKey(alice,both.id,'FR')).normal,0);
+  assert.equal(state.rows.get(rowKey(alice,both.id)).normal,2);
+
+  // Back in English: the French copy is listed, and the panel link switches language.
+  assert.deepEqual(counts(both.id),['2','0']);
+  assert.match(tile(both.id).textContent,/Also FR 1/);
+  d.querySelector('[data-ownership="language"]').click();
+  assert.equal(d.querySelectorAll('#gridContainer > div').length,1);
+  w.openCardPanel(both.id);
+  assert.equal(text('panelNormalVal'),'2');
+  d.querySelector('#panelOtherLanguages [data-language="FR"]').click();
+  assert.equal(text('panelFoilVal'),'1');
+  assert.equal(text('panelName'),'Nom Français');
+  assert.equal(d.getElementById('panelOtherLanguages').textContent,'Also EN 2');
+
+  // The edit dialog changes the row of the selected language, including its image.
+  w.openEditModal(both.id);
+  assert.equal(text('modalTitle'),'Edit card & image · FR');
+  assert.equal(d.getElementById('modalImageUrl').value,'https://openrift.app/media/cards/fr-400w.webp');
+  d.getElementById('modalFoil').value='3';
+  d.getElementById('modalImageUrl').value='https://example.test/mine.png';
+  d.getElementById('modalCardForm').dispatchEvent(new w.Event('submit',{cancelable:true}));
+  await waitFor(()=>state.rows.get(rowKey(alice,both.id,'FR')).foil===3);
+  await waitFor(()=>text('panelFoilVal')==='3');
+  assert.equal(state.rows.get(rowKey(alice,both.id,'FR')).image_override,'https://example.test/mine.png');
+  assert.equal(state.rows.get(rowKey(alice,both.id)).image_override,null);
+  assert.equal(d.getElementById('panelImg').getAttribute('src'),'https://example.test/mine.png');
+});
+
+test('a tab return reads only the collection; the reload button reads the catalog again', async t=>{
+  const state=apiFixture(), {d,text,signIn}=await app(t,state);
+  await signIn();
+  await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
+  const reads=name=>state.calls.filter(c=>c.method==='GET'&&c.path.endsWith(name)&&c.query.get('offset')==='0').length;
+  assert.deepEqual([reads('/catalog_variants'),reads('/collection_items')],[1,1]);
+  // jsdom reports a hidden page by default.
+  Object.defineProperty(d,'visibilityState',{value:'visible',configurable:true});
+  d.dispatchEvent(new d.defaultView.Event('visibilitychange'));
+  await waitFor(()=>reads('/collection_items')===2);
+  await waitFor(()=>text('storageStatus').includes('Online collection loaded'));
+  assert.equal(reads('/catalog_variants'),1);
+  d.getElementById('btnCloudRefresh').click();
+  await waitFor(()=>reads('/catalog_variants')===2);
 });

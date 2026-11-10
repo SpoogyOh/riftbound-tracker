@@ -91,6 +91,19 @@
           <span id="statFoilCopies" class="text-foil">0</span> foil (<span id="statFoilRatio">0%</span>) ·
           <span id="statPlaysets" class="text-ink">0</span> <span title="Complete playsets: 10 copies per Rune variant, 1 for Legends and Battlefields, 3 for other cards. Normal and foil count together; variants combine except for Runes.">playsets</span>
         </p>
+        <details>
+          <summary class="caps text-xs cursor-pointer">Progress by set</summary>
+          <table class="mt-2 text-xs tabular-nums border-collapse">
+            <thead>
+              <tr class="caps">
+                <th class="py-1 pr-4 text-left">Set</th>
+                <th class="py-1 px-4 text-right">Regular</th>
+                <th class="py-1 pl-4 text-right" title="Promos, alternate art, signatures, oversized and metal variants">Special</th>
+              </tr>
+            </thead>
+            <tbody id="setProgressBody"></tbody>
+          </table>
+        </details>
       </div>
     </section>
 
@@ -102,11 +115,18 @@
           <button type="button" popovertarget="filterPanel" popovertargetaction="hide" aria-label="Close filters" class="caps text-sm cursor-pointer">[×]</button>
         </div>
 
+        <!-- Shown only when the catalog offers more than one language -->
+        <div id="languageFilter" hidden>
+          <p class="caps text-xs text-muted mb-2" title="Counters, names and images follow this language. Totals and playsets count every language.">Language</p>
+          <div id="languageTabs" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
         <div>
           <p class="caps text-xs text-muted mb-2">Ownership</p>
           <div class="flex flex-col gap-0.5" id="ownershipTabs">
             <button type="button" data-ownership="all" aria-pressed="true" class="ownership-tab option">All</button>
             <button type="button" data-ownership="owned" aria-pressed="false" class="ownership-tab option">Owned</button>
+            <button type="button" data-ownership="language" aria-pressed="false" hidden class="ownership-tab option">Owned in EN</button>
             <button type="button" data-ownership="foil" aria-pressed="false" class="ownership-tab option">Foil</button>
             <button type="button" data-ownership="missing" aria-pressed="false" class="ownership-tab option">Missing</button>
             <button type="button" data-ownership="incomplete" aria-pressed="false" class="ownership-tab option">Incomplete playset</button>
@@ -178,16 +198,17 @@
         <!-- TABLE VIEW -->
         <section id="tableContainer" aria-label="List" class="hidden border-t border-ink">
           <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+            <!-- Fixed column widths: a changed row must not make the browser measure every other row again. -->
+            <table class="w-full min-w-[60rem] table-fixed text-left border-collapse">
               <thead>
                 <tr class="border-b border-line caps text-xs">
                   <th class="py-3 pr-3">Card</th>
-                  <th class="py-3 px-3">Domain</th>
-                  <th class="py-3 px-3">Type &amp; rarity</th>
-                  <th class="py-3 px-3 text-center">Normal / special</th>
-                  <th class="py-3 px-3 text-center">Foil</th>
-                  <th class="py-3 px-3 text-center" title="Normal and foil count together. Runes: 10 copies per variant. Other cards combine variants.">Playset</th>
-                  <th class="py-3 pl-3 text-right"><span class="sr-only">Edit</span></th>
+                  <th class="py-3 px-3 w-44">Domain</th>
+                  <th class="py-3 px-3 w-60">Type &amp; rarity</th>
+                  <th class="py-3 px-3 w-36 text-center">Normal / special</th>
+                  <th class="py-3 px-3 w-36 text-center">Foil</th>
+                  <th class="py-3 px-3 w-24 text-center" title="Normal and foil count together. Runes: 10 copies per variant. Other cards combine variants.">Playset</th>
+                  <th class="py-3 pl-3 w-12 text-right"><span class="sr-only">Edit</span></th>
                 </tr>
               </thead>
               <tbody id="cardTableBody" class="divide-y divide-line text-sm"></tbody>
@@ -234,6 +255,7 @@
       </div>
 
       <div class="space-y-2">
+        <p id="panelLanguage" hidden class="caps text-xs text-muted"></p>
         <div class="flex items-center justify-between gap-3">
           <span id="panelFinish" class="caps text-sm">Normal</span>
           <div class="flex items-center gap-2">
@@ -254,6 +276,7 @@
           <span id="panelPlaysetLabel" class="text-muted">Playset</span>
           <span id="panelPlaysetText" class="font-bold tabular-nums">0 / 3</span>
         </p>
+        <p id="panelOtherLanguages" hidden class="text-xs text-muted"></p>
       </div>
 
       <details class="border-t border-line pt-3">
@@ -288,6 +311,10 @@
           <button id="captureNormal" type="button" aria-pressed="true" class="tab">Normal</button>
           <button id="captureFoil" type="button" aria-pressed="false" class="tab">Foil</button>
         </div>
+      </div>
+      <div id="captureLanguageRow" hidden class="flex items-center justify-between gap-3">
+        <span class="caps text-xs">Language</span>
+        <div id="captureLanguages" class="flex flex-wrap justify-end gap-1.5"></div>
       </div>
 
       <div>

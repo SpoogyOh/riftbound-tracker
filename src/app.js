@@ -33,8 +33,12 @@ const state = {
   rarity: 'all',
   sort: 'number',
   viewMode: 'grid',
-  activeCardId: null
+  activeCardId: null,
+  // Counters, names and images follow this language; totals and playsets count every language.
+  language: 'EN',
+  languages: ['EN']
 };
+const LANGUAGE_KEY = 'riftbound_tracker_language';
 
 function generateCardSvgDataUri(card) {
   const d = DOMAIN_META[card.domain] || DOMAIN_META.Neutral;
@@ -87,8 +91,9 @@ function generateCardSvgDataUri(card) {
 }
 
 function getCardPrimaryImageUrl(card) {
-  if (card.imageUrl && card.imageUrl.trim() !== '') {
-    return card.imageUrl.trim();
+  const url = cardImage(card);
+  if (url && url.trim() !== '') {
+    return url.trim();
   }
   return generateCardSvgDataUri(card);
 }
@@ -105,6 +110,7 @@ function handleCardImageError(imgEl, cardId) {
 let cloud = null;
 let liveCatalog = null;
 let modalCloudToken;
+let modalLanguage = 'EN';
 function currentCatalog() { return liveCatalog || []; }
 function setStorageStatus(message, error = false) {
   const el = document.getElementById('storageStatus');
@@ -124,12 +130,34 @@ function renderType(card) {
 function renderRarity(card) {
   return `<span class="rb-label">${renderIcon(RARITY_ICONS[card.rarity])}${escapeHtml(card.rarity)}</span>`;
 }
-function cardLabel(card) {
-  return card.name + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.active === false ? ' [Archived]' : '');
+// A variant that was not printed in the selected language shows its primary language instead.
+function cardLanguage(card) { return card.languages.includes(state.language) ? state.language : card.languages[0]; }
+function cardName(card) { return card.localized[state.language]?.name || card.name; }
+function catalogImage(card, language) { return card.localized[language]?.imageUrl || card.imageUrl; }
+function cardImage(card) {
+  const language = cardLanguage(card);
+  return card.copies[language]?.imageOverride || catalogImage(card, language);
 }
-function canCount(card, field) {
-  if (cloud?.locked) return false;
+function copies(card, field, language = state.language) { return card.copies[language]?.[field] || 0; }
+function otherLanguages(card) {
+  return Object.entries(card.copies).map(([language, c]) => [language, c.normal + c.foil])
+    .filter(([language, total]) => language !== state.language && total > 0);
+}
+function renderOtherLanguages(card) {
+  const others = otherLanguages(card);
+  return others.length ? `<p class="text-xs text-muted">Also ${others.map(([language, total]) => `${escapeHtml(language)} ${total}`).join(' · ')}</p>` : '';
+}
+/** The printed name in every language, for search and capture. */
+function cardNames(card) { return [card.name, ...Object.values(card.localized).map(entry => entry.name)]; }
+function cardLabel(card) {
+  return cardName(card) + (card.variant ? ` [${card.variant}]` : '') + (card.preview ? ' [Preview]' : '') + (card.active === false ? ' [Archived]' : '');
+}
+function available(card, field, language = state.language) {
+  if (!card.languages.includes(language)) return false;
   return !card.finishes || (field === 'foil' ? card.finishes.includes('foil') : card.specialFinish || card.finishes.includes('normal'));
+}
+function canCount(card, field, language = state.language) {
+  return !cloud?.locked && available(card, field, language);
 }
 function refreshCatalogControls() {
   for (const [id, values] of [
@@ -142,19 +170,49 @@ function refreshCatalogControls() {
     if ([...el.options].some(o=>o.value===selected)) el.value=selected;
   }
   document.getElementById('catalogStatus').textContent = liveCatalog ? ` · ${liveCatalog.length.toLocaleString('en-US')} variants · Supabase` : '';
+  // Languages the catalog offers, most common first. The controls stay hidden while there is only one.
+  const counts = new Map();
+  for (const card of state.cards) for (const language of card.languages) counts.set(language, (counts.get(language) || 0) + 1);
+  state.languages = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
+  if (state.languages.length && !state.languages.includes(state.language)) state.language = state.languages[0];
+  renderLanguageControls();
 }
 
-// JSON backups keep schema version 3: owned counts and image overrides of catalog variants.
+function renderLanguageControls() {
+  const several = state.languages.length > 1;
+  const tabs = state.languages.map(language =>
+    `<button type="button" data-language="${escapeHtml(language)}" aria-pressed="${language === state.language}" class="tab">${escapeHtml(language)}</button>`).join('');
+  for (const id of ['languageTabs', 'captureLanguages']) document.getElementById(id).innerHTML = tabs;
+  for (const id of ['languageFilter', 'captureLanguageRow']) document.getElementById(id).hidden = !several;
+  const owned = document.querySelector('[data-ownership="language"]');
+  owned.hidden = !several;
+  owned.textContent = `Owned in ${state.language}`;
+  if (!several && state.ownership === 'language') setOwnership('all');
+}
+
+function setOwnership(ownership) {
+  state.ownership = ownership;
+  document.querySelectorAll('.ownership-tab').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ownership === ownership)));
+}
+
+function setLanguage(language) {
+  if (!state.languages.includes(language) || language === state.language) return;
+  state.language = language;
+  try { localStorage.setItem(LANGUAGE_KEY, language); } catch {}
+  renderLanguageControls();
+  renderListAndGrid();
+  updateCaptureCandidates();
+}
+
+// JSON backups, schema version 4: owned counts and image overrides per catalog variant and language.
 function backupRecord() {
-  const byId = new Map(currentCatalog().map(c => [c.id, c]));
-  const items = state.cards.flatMap(c => {
-    const base = byId.get(c.id);
-    const imageOverride = base && c.imageUrl !== base.imageUrl ? c.imageUrl : undefined;
-    if (!c.normal && !c.foil && !imageOverride) return [];
-    return [{ id: c.id, source: 'OpenRift', sourcePrintingIds: c.sourcePrintingIds, name: c.name, number: c.number,
-      normal: c.normal || 0, foil: c.foil || 0, imageOverride }];
-  });
-  return { schemaVersion: 3, savedAt: new Date().toISOString(), items };
+  const items = state.cards.flatMap(c => Object.entries(c.copies).flatMap(([language, own]) => {
+    const imageOverride = own.imageOverride || undefined;
+    if (!own.normal && !own.foil && !imageOverride) return [];
+    return [{ id: c.id, language, source: 'OpenRift', sourcePrintingIds: c.sourcePrintingIds, name: c.name, number: c.number,
+      normal: own.normal, foil: own.foil, imageOverride }];
+  }));
+  return { schemaVersion: 4, savedAt: new Date().toISOString(), items };
 }
 
 function getPlaysetTotal(card) {
@@ -168,17 +226,19 @@ function getPlaysetDescription(card) {
 function updateCardCount(cardId, field, newValue) {
   const idx = state.cards.findIndex(c => c.id === cardId);
   if (idx === -1) return;
-  if (!canCount(state.cards[idx], field)) return;
+  // A value typed while another change is saving is not sent; show the stored count again.
+  if (!canCount(state.cards[idx], field)) return renderResults(cardId);
   const cleanVal = Math.max(0, Math.min(999, parseInt(newValue, 10) || 0));
-  return cloud?.change(cardId, { [field]: cleanVal });
+  return cloud?.change(cardId, state.language, { [field]: cleanVal });
 }
 
-function adjustCardCount(cardId, field, delta) {
+function adjustCardCount(cardId, field, delta, language = state.language) {
   const idx = state.cards.findIndex(c => c.id === cardId);
   if (idx === -1) return;
-  if (!canCount(state.cards[idx], field)) return;
-  if (state.cards[idx][field] + delta < 0 || state.cards[idx][field] + delta > 999) return;
-  return cloud?.change(cardId, { finish: field, delta });
+  if (!canCount(state.cards[idx], field, language)) return;
+  const next = copies(state.cards[idx], field, language) + delta;
+  if (next < 0 || next > 999) return;
+  return cloud?.change(cardId, language, { finish: field, delta });
 }
 
 function getFilteredCards() {
@@ -190,7 +250,7 @@ function getFilteredCards() {
     const playsetTotal = getPlaysetTotal(card);
 
     if (q) {
-      const matchName = card.name.toLowerCase().includes(q);
+      const matchName = cardNames(card).some(name => name.toLowerCase().includes(q));
       const matchNum = card.number.toLowerCase().includes(q);
       const matchType = card.type.toLowerCase().includes(q);
       const matchDomain = cardDomains(card).join(' ').toLowerCase().includes(q);
@@ -200,6 +260,7 @@ function getFilteredCards() {
 
     if (state.ownership === 'owned' && total === 0) return false;
     if (state.ownership === 'foil' && (card.foil || 0) === 0) return false;
+    if (state.ownership === 'language' && copies(card, 'normal') + copies(card, 'foil') === 0) return false;
     if (state.ownership === 'missing' && total > 0) return false;
     if (state.ownership === 'incomplete' && playsetTotal >= target) return false;
     if (state.ownership === 'playset' && playsetTotal < target) return false;
@@ -284,10 +345,50 @@ function renderStats() {
   document.getElementById('statProgressBar').style.width = `${uniquePct}%`;
   const playsets = [...state.playsets.values()].filter(p => p.total >= p.target).length;
   document.getElementById('statPlaysets').textContent = playsets.toLocaleString('en-US');
+
+  // Per set: regular cards apart from promos, alternate art and other special variants.
+  const sets = new Map();
+  for (const c of state.cards) {
+    const set = sets.get(c.set) || { name: c.setName, regular: [0, 0], special: [0, 0] };
+    const group = c.variant ? set.special : set.regular;
+    group[1]++;
+    if ((c.normal || 0) + (c.foil || 0) > 0) group[0]++;
+    sets.set(c.set, set);
+  }
+  const share = ([owned, total]) => total ? `${owned} / ${total} <span class="text-muted">(${Math.round(owned / total * 100)}%)</span>` : '<span class="text-muted">–</span>';
+  document.getElementById('setProgressBody').innerHTML = [...sets].sort(([a], [b]) => a.localeCompare(b)).map(([code, set]) => `
+    <tr class="border-t border-line">
+      <th scope="row" class="py-1 pr-4 text-left font-normal"><span class="caps">${escapeHtml(code)}</span> ${escapeHtml(set.name)}</th>
+      <td class="py-1 px-4 text-right whitespace-nowrap">${share(set.regular)}</td>
+      <td class="py-1 pl-4 text-right whitespace-nowrap">${share(set.special)}</td>
+    </tr>`).join('');
 }
 
-function renderListAndGrid() {
+// Result IDs in the order they are in the page, to tell when a change needs no new list.
+let renderedIds = [];
+
+function renderListAndGrid() { renderResults(); }
+
+/** Renders the results. After a change to one card, only that card and its playset siblings are replaced. */
+function renderResults(changedId) {
   const filtered = getFilteredCards();
+  if (changedId && filtered.length === renderedIds.length && filtered.every((card, i) => card.id === renderedIds[i])) {
+    const changed = state.cards.find(c => c.id === changedId);
+    const playset = changed && getPlaysetKey(changed);
+    const container = document.getElementById(state.viewMode === 'table' ? 'cardTableBody' : 'gridContainer');
+    filtered.forEach((card, i) => {
+      if (card.id !== changedId && getPlaysetKey(card) !== playset) return;
+      const old = container.children[i];
+      // Keep keyboard focus on the same control of the replaced card.
+      const controls = [...old.querySelectorAll('button, input, a')];
+      const focused = controls.indexOf(document.activeElement);
+      old.outerHTML = state.viewMode === 'table' ? tableRowHtml(card) : gridCardHtml(card);
+      if (focused !== -1) container.children[i].querySelectorAll('button, input, a')[focused]?.focus();
+    });
+    if (state.activeCardId) syncCardPanel(state.activeCardId);
+    return;
+  }
+  renderedIds = filtered.map(card => card.id);
   const totalCatalog = state.cards.length;
   document.getElementById('resultsCounter').textContent =
     `${filtered.length.toLocaleString('en-US')} of ${totalCatalog.toLocaleString('en-US')} cards`;
@@ -331,11 +432,15 @@ function renderListAndGrid() {
 }
 
 function renderTableRows(cards) {
-  const tbody = document.getElementById('cardTableBody');
-  tbody.innerHTML = cards.map(card => {
-    const normal = card.normal || 0;
-    const foil = card.foil || 0;
-    const total = normal + foil;
+  document.getElementById('cardTableBody').innerHTML = cards.map(tableRowHtml).join('');
+}
+
+function tableRowHtml(card) {
+    // Counters show the selected language; ownership, foil effects and playsets count every language.
+    const normal = copies(card, 'normal');
+    const foil = copies(card, 'foil');
+    const anyFoil = card.foil || 0;
+    const total = (card.normal || 0) + anyFoil;
     const target = getPlaysetTarget(card);
     const playsetTotal = getPlaysetTotal(card);
     const imgUrl = getCardPrimaryImageUrl(card);
@@ -347,7 +452,7 @@ function renderTableRows(cards) {
             <button
               type="button"
               onclick="openCardPanel('${escapeHtml(card.id)}')"
-              class="relative w-10 h-14 rounded-[4px] overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${foil > 0 ? 'foil-active-border' : ''}"
+              class="relative w-10 h-14 rounded-[4px] overflow-hidden bg-soft shrink-0 cursor-pointer group-hover:scale-105 transition-transform ${anyFoil > 0 ? 'foil-active-border' : ''}"
               title="Enlarge card image"
             >
               <img
@@ -357,14 +462,15 @@ function renderTableRows(cards) {
                 onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
                 class="w-full h-full object-cover ${total === 0 ? 'card-unowned-img' : ''}"
               />
-              ${foil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
+              ${anyFoil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
             </button>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-xs text-muted tabular-nums">${escapeHtml(card.number)}</span>
-                ${foil > 0 ? `<span class="caps text-[11px] px-1.5 rounded-[3px] border border-line foil-badge text-foil">${foil}× Foil</span>` : ''}
+                ${anyFoil > 0 ? `<span class="caps text-[11px] px-1.5 rounded-[3px] border border-line foil-badge text-foil">${anyFoil}× Foil</span>` : ''}
               </div>
               <div class="caps text-sm truncate">${card.sourceUrl ? `<a href="${escapeHtml(card.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${escapeHtml(cardLabel(card))} ↗</a>` : escapeHtml(cardLabel(card))}</div>
+              ${renderOtherLanguages(card)}
             </div>
           </div>
         </td>
@@ -382,30 +488,30 @@ function renderTableRows(cards) {
         </td>
         <td class="py-2 px-3">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
+            <button type="button" ${!available(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
             <input
               type="number"
               min="0"
               max="999"
-              value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
+              value="${normal}" ${!available(card,'normal') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
               class="count"
             />
-            <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
+            <button type="button" ${!available(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
           </div>
         </td>
         <td class="py-2 px-3">
           <div class="flex items-center justify-center gap-1">
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
+            <button type="button" ${!available(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
             <input
               type="number"
               min="0"
               max="999"
-              value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
+              value="${foil}" ${!available(card,'foil') ? 'disabled' : ''}
               onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
               class="count text-foil ${foil > 0 ? 'foil-badge' : ''}"
             />
-            <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
+            <button type="button" ${!available(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
           </div>
         </td>
         <td class="py-2 px-3 text-center whitespace-nowrap">
@@ -425,15 +531,17 @@ function renderTableRows(cards) {
         </td>
       </tr>
     `;
-  }).join('');
 }
 
 function renderGridCards(cards) {
-  const grid = document.getElementById('gridContainer');
-  grid.innerHTML = cards.map(card => {
-    const normal = card.normal || 0;
-    const foil = card.foil || 0;
-    const total = normal + foil;
+  document.getElementById('gridContainer').innerHTML = cards.map(gridCardHtml).join('');
+}
+
+function gridCardHtml(card) {
+    const normal = copies(card, 'normal');
+    const foil = copies(card, 'foil');
+    const anyFoil = card.foil || 0;
+    const total = (card.normal || 0) + anyFoil;
     const target = getPlaysetTarget(card);
     const playsetTotal = getPlaysetTotal(card);
     const imgUrl = getCardPrimaryImageUrl(card);
@@ -458,7 +566,7 @@ function renderGridCards(cards) {
           </button>
         </div>
 
-        <div class="relative w-full card-aspect rounded-md overflow-hidden bg-soft ${foil > 0 ? 'foil-active-border' : ''}">
+        <div class="relative w-full card-aspect rounded-md overflow-hidden bg-soft ${anyFoil > 0 ? 'foil-active-border' : ''}">
           <img
             src="${escapeHtml(imgUrl)}"
             alt="${escapeHtml(cardLabel(card))}"
@@ -467,59 +575,70 @@ function renderGridCards(cards) {
             onerror="handleCardImageError(this, '${escapeHtml(card.id)}')"
             class="w-full h-full object-cover cursor-pointer group-hover:scale-103 transition-transform duration-300 ${total === 0 ? 'card-unowned-img' : ''}"
           />
-          ${foil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
+          ${anyFoil > 0 ? '<div class="absolute inset-0 foil-image-glare"></div>' : ''}
         </div>
 
         <div class="mt-auto space-y-1.5">
           <div class="hidden sm:flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
             <span class="caps text-xs truncate">${card.specialFinish ? escapeHtml(card.finishes.join(' / ')) : 'Normal'}</span>
             <div class="flex items-center gap-1">
-              <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
+              <button type="button" ${!available(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', -1)" class="step">−</button>
               <input
                 type="number"
                 min="0"
                 max="999"
-                value="${normal}" ${!canCount(card,'normal') ? 'disabled' : ''}
+                value="${normal}" ${!available(card,'normal') ? 'disabled' : ''}
                 onchange="updateCardCount('${escapeHtml(card.id)}', 'normal', this.value)"
                 class="count count-sm"
               />
-              <button type="button" ${!canCount(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
+              <button type="button" ${!available(card,'normal') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'normal', 1)" class="step">＋</button>
             </div>
           </div>
 
           <div class="hidden sm:flex items-center justify-between gap-2 pl-2.5 pr-1 py-1 border border-line rounded-[3px]">
             <span class="caps text-xs text-foil">Foil</span>
             <div class="flex items-center gap-1">
-              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
+              <button type="button" ${!available(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', -1)" class="step text-foil">−</button>
               <input
                 type="number"
                 min="0"
                 max="999"
-                value="${foil}" ${!canCount(card,'foil') ? 'disabled' : ''}
+                value="${foil}" ${!available(card,'foil') ? 'disabled' : ''}
                 onchange="updateCardCount('${escapeHtml(card.id)}', 'foil', this.value)"
                 class="count count-sm text-foil ${foil > 0 ? 'foil-badge' : ''}"
               />
-              <button type="button" ${!canCount(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
+              <button type="button" ${!available(card,'foil') ? 'disabled' : ''} onclick="adjustCardCount('${escapeHtml(card.id)}', 'foil', 1)" class="step text-foil">＋</button>
             </div>
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-1 pt-1 text-xs" title="${getPlaysetDescription(card)}">
-            <span class="text-muted">Playset <strong class="text-ink tabular-nums">${playsetTotal} / ${target}</strong>${foil > 0 ? `<span class="sm:hidden text-foil"> · ${foil} foil</span>` : ''}</span>
+            <span class="text-muted">Playset <strong class="text-ink tabular-nums">${playsetTotal} / ${target}</strong>${anyFoil > 0 ? `<span class="sm:hidden text-foil"> · ${anyFoil} foil</span>` : ''}</span>
             <div class="flex items-center gap-1">
               ${renderPlaysetDots(playsetTotal, target)}
             </div>
           </div>
+          ${renderOtherLanguages(card)}
         </div>
       </div>
     `;
-  }).join('');
+}
+
+// Counters are not drawn again for a lock. While one change saves, further changes are ignored by the handlers;
+// while the collection loads or could not be loaded, a page attribute dims every counter.
+function syncLock() {
+  const locked = !!cloud?.locked && !(cloud.busy && cloud.ready);
+  if (locked !== ('locked' in document.body.dataset)) {
+    if (locked) document.body.dataset.locked = '';
+    else delete document.body.dataset.locked;
+  }
+  document.querySelector('#modalCardForm button[type="submit"]').disabled = !!cloud?.locked;
+  document.getElementById('btnCloudRefresh').disabled = !!cloud?.busy;
 }
 
 function renderAll() {
   renderStats();
   renderListAndGrid();
-  document.querySelector('#modalCardForm button[type="submit"]').disabled = !!cloud?.locked;
-  document.getElementById('btnCloudRefresh').disabled = !!cloud?.busy;
+  syncLock();
 }
 
 function openCardPanel(cardId) {
@@ -547,8 +666,8 @@ function stepCardPanel(delta) {
 function syncCardPanel(cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card) return;
-  const normal = card.normal || 0;
-  const foil = card.foil || 0;
+  const normal = copies(card, 'normal');
+  const foil = copies(card, 'foil');
   const target = getPlaysetTarget(card);
 
   document.getElementById('panelNumber').textContent = card.number;
@@ -559,20 +678,35 @@ function syncCardPanel(cardId) {
   sourceLink.href=card.sourceUrl || 'https://openrift.app';
   sourceLink.classList.toggle('hidden', !card.sourceUrl);
   document.getElementById('panelFinish').textContent=card.specialFinish ? card.finishes.join(' / ') : 'Normal';
-  for(const [id,field] of [['panelNormalMinus','normal'],['panelNormalPlus','normal'],['panelFoilMinus','foil'],['panelFoilPlus','foil']]) document.getElementById(id).disabled=!canCount(card,field);
+  for(const [id,field] of [['panelNormalMinus','normal'],['panelNormalPlus','normal'],['panelFoilMinus','foil'],['panelFoilPlus','foil']]) document.getElementById(id).disabled=!available(card,field);
+  // Copies in other languages; a click switches the language.
+  const several = state.languages.length > 1;
+  const panelLanguage = document.getElementById('panelLanguage');
+  panelLanguage.hidden = !several;
+  panelLanguage.textContent = card.languages.includes(state.language) ? state.language : `Not printed in ${state.language}`;
+  const others = otherLanguages(card);
+  const panelOthers = document.getElementById('panelOtherLanguages');
+  panelOthers.hidden = !others.length;
+  panelOthers.innerHTML = 'Also ' + others.map(([language, total]) =>
+    `<button type="button" data-language="${escapeHtml(language)}" class="underline cursor-pointer">${escapeHtml(language)} ${total}</button>`).join(' · ');
   document.getElementById('panelPlaysetText').textContent = `${getPlaysetTotal(card)} / ${target}`;
   const playsetLabel = document.getElementById('panelPlaysetLabel');
   playsetLabel.textContent = card.type === 'Rune' ? 'Playset · this variant' : 'Playset · all variants';
   playsetLabel.title = getPlaysetDescription(card);
 
   const imgEl = document.getElementById('panelImg');
-  delete imgEl.dataset.fallbackApplied;
-  imgEl.onerror = () => handleCardImageError(imgEl, card.id);
+  const imgUrl = getCardPrimaryImageUrl(card);
   imgEl.alt = cardLabel(card);
-  imgEl.src = getCardPrimaryImageUrl(card);
+  // Counting a copy keeps the image; only a different image is loaded.
+  if (imgEl.dataset.url !== imgUrl) {
+    delete imgEl.dataset.fallbackApplied;
+    imgEl.onerror = () => handleCardImageError(imgEl, card.id);
+    imgEl.dataset.url = imgUrl;
+    imgEl.src = imgUrl;
+  }
 
-  document.getElementById('panelFoilGlare').classList.toggle('hidden', foil === 0);
-  document.getElementById('panelImgWrapper').classList.toggle('foil-active-border', foil > 0);
+  document.getElementById('panelFoilGlare').classList.toggle('hidden', !card.foil);
+  document.getElementById('panelImgWrapper').classList.toggle('foil-active-border', card.foil > 0);
 
   document.getElementById('panelNormalVal').textContent = normal;
   document.getElementById('panelFoilVal').textContent = foil;
@@ -600,8 +734,9 @@ const capture = { finish: 'normal', candidates: [], index: -1, log: [], nextId: 
 function captureMatches(raw) {
   const key = raw.trim().toLowerCase();
   if (!key) return [];
-  const exact = state.cards.filter(c => c.number.toLowerCase() === key || c.name.toLowerCase() === key);
-  return exact.length ? exact : state.cards.filter(c => c.name.toLowerCase().includes(key) || c.number.toLowerCase().includes(key));
+  const names = c => cardNames(c).map(name => name.toLowerCase());
+  const exact = state.cards.filter(c => c.number.toLowerCase() === key || names(c).includes(key));
+  return exact.length ? exact : state.cards.filter(c => names(c).some(name => name.includes(key)) || c.number.toLowerCase().includes(key));
 }
 
 function setCaptureMessage(text) {
@@ -617,7 +752,7 @@ function renderCaptureCandidates() {
       <img src="${escapeHtml(getCardPrimaryImageUrl(card))}" alt="" loading="lazy" onerror="handleCardImageError(this, '${escapeHtml(card.id)}')" class="w-8 h-11 shrink-0 rounded-[2px] object-cover bg-soft" />
       <span class="min-w-0">
         <span class="caps text-sm block truncate">${escapeHtml(cardLabel(card))}</span>
-        <span class="text-xs block">${escapeHtml(card.number)} · ${card.normal || 0} normal · ${card.foil || 0} foil</span>
+        <span class="text-xs block">${escapeHtml(card.number)} · ${copies(card, 'normal')} normal · ${copies(card, 'foil')} foil</span>
       </span>
     </button>`).join('');
   if (capture.index >= 0) input.setAttribute('aria-activedescendant', `capture-option-${capture.index}`);
@@ -643,7 +778,7 @@ function renderCaptureLog() {
     <li class="flex items-center justify-between gap-3 py-2">
       <span class="min-w-0">
         <span class="caps text-sm block truncate">${escapeHtml(entry.label)}</span>
-        <span class="text-xs">${escapeHtml(entry.number)} · ${entry.finish === 'foil' ? 'Foil' : 'Normal'} +1</span>
+        <span class="text-xs">${escapeHtml(entry.number)} · ${entry.finish === 'foil' ? 'Foil' : 'Normal'}${state.languages.length > 1 ? ` · ${escapeHtml(entry.language)}` : ''} +1</span>
       </span>
       <button type="button" data-undo="${entry.id}" class="caps text-xs underline cursor-pointer">Undo</button>
     </li>`).join('');
@@ -657,10 +792,11 @@ function setCaptureFinish(finish) {
 }
 
 async function addCaptured(card) {
-  const finish = capture.finish;
+  const finish = capture.finish, language = state.language;
   if (cloud?.locked) return setCaptureMessage('Still saving. Try again in a moment.');
+  if (!card.languages.includes(language)) return setCaptureMessage(`${cardLabel(card)} was not printed in ${language}.`);
   if (!canCount(card, finish)) return setCaptureMessage(`${cardLabel(card)} has no ${finish} version.`);
-  if ((card[finish] || 0) >= 999) return setCaptureMessage(`${cardLabel(card)} already has 999 ${finish} copies.`);
+  if (copies(card, finish) >= 999) return setCaptureMessage(`${cardLabel(card)} already has 999 ${finish} copies.`);
   const label = cardLabel(card);
   // Clear first so the next card can be typed while an online save is pending.
   document.getElementById('captureInput').value = '';
@@ -669,7 +805,7 @@ async function addCaptured(card) {
   renderCaptureCandidates();
   const ok = await adjustCardCount(card.id, finish, 1);
   if (ok !== true) return setCaptureMessage(`Not confirmed: ${label}. Check the save status and your counts.`);
-  capture.log.unshift({ id: capture.nextId++, cardId: card.id, label, number: card.number, finish });
+  capture.log.unshift({ id: capture.nextId++, cardId: card.id, label, number: card.number, finish, language });
   renderCaptureLog();
   setCaptureMessage(`Added ${label} · ${finish}.`);
 }
@@ -679,8 +815,8 @@ async function undoCaptured(entryId) {
   if (!entry) return;
   if (cloud?.locked) return setCaptureMessage('Still saving. Try again in a moment.');
   const card = state.cards.find(c => c.id === entry.cardId);
-  if (card && (card[entry.finish] || 0) > 0) {
-    const ok = await adjustCardCount(entry.cardId, entry.finish, -1);
+  if (card && copies(card, entry.finish, entry.language) > 0) {
+    const ok = await adjustCardCount(entry.cardId, entry.finish, -1, entry.language);
     if (ok !== true) return setCaptureMessage(`Undo not confirmed: ${entry.label}. Check the save status and your counts.`);
     setCaptureMessage(`Removed one ${entry.finish} ${entry.label}.`);
   } else {
@@ -709,16 +845,32 @@ function closeCapture() {
   if (dialog.open) dialog.close ? dialog.close() : dialog.removeAttribute('open');
 }
 
+// Uploaded images are stored with the collection row; the database rejects longer values.
+const MAX_IMAGE_LENGTH = 400000;
+
+/** Card-sized JPEG of an uploaded photo, at most 600px on its longer side. */
+async function scaledImageDataUrl(file) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
 function openEditModal(cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card || cloud?.locked) return;
-  document.getElementById('modalNormal').disabled=!canCount(card,'normal');
-  document.getElementById('modalFoil').disabled=!canCount(card,'foil');
-  modalCloudToken = cloud?.editToken(cardId);
+  modalLanguage = cardLanguage(card);
+  document.getElementById('modalNormal').disabled=!canCount(card,'normal',modalLanguage);
+  document.getElementById('modalFoil').disabled=!canCount(card,'foil',modalLanguage);
+  modalCloudToken = cloud?.editToken(cardId, modalLanguage);
+  document.getElementById('modalTitle').textContent = 'Edit card & image' + (state.languages.length > 1 ? ` · ${modalLanguage}` : '');
   document.getElementById('modalCardId').value = card.id;
-  document.getElementById('modalImageUrl').value = card.imageUrl || '';
-  document.getElementById('modalNormal').value = card.normal || 0;
-  document.getElementById('modalFoil').value = card.foil || 0;
+  document.getElementById('modalImageUrl').value = cardImage(card) || '';
+  document.getElementById('modalNormal').value = copies(card, 'normal', modalLanguage);
+  document.getElementById('modalFoil').value = copies(card, 'foil', modalLanguage);
   document.getElementById('cardModal').classList.remove('hidden');
 }
 
@@ -733,6 +885,7 @@ window.openCardPanel = openCardPanel;
 window.handleCardImageError = handleCardImageError;
 
 document.addEventListener('DOMContentLoaded', async () => {
+  try { state.language = localStorage.getItem(LANGUAGE_KEY) || state.language; } catch {}
   for (const button of document.querySelectorAll('.domain-pill')) {
     const icon = DOMAIN_ICONS[button.dataset.domain];
     if (icon) button.insertAdjacentHTML('afterbegin', renderIcon(icon));
@@ -750,10 +903,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         liveCatalog = catalog; state.cards = cards; state.playsets = summarizePlaysets(cards);
         refreshCatalogControls();
       },
-      render: renderAll
+      changed(cards, id) {
+        state.cards = cards; state.playsets = summarizePlaysets(cards);
+        renderStats();
+        renderResults(id);
+      },
+      render: renderAll,
+      lock: syncLock
     });
   }
   renderAll();
+
+  // Language tabs in the sidebar and in capture, and the other-language links in the card panel.
+  document.addEventListener('click', e => {
+    const button = e.target.closest?.('[data-language]');
+    if (button) setLanguage(button.dataset.language);
+  });
 
   document.getElementById('btnClosePanel').addEventListener('click', closeCardPanel);
   document.getElementById('btnPanelPrev').addEventListener('click', () => stepCardPanel(-1));
@@ -778,14 +943,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  document.getElementById('modalImageFile').addEventListener('change', e => {
+  document.getElementById('modalImageFile').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      document.getElementById('modalImageUrl').value = ev.target.result;
-    };
-    reader.readAsDataURL(file);
+    try {
+      document.getElementById('modalImageUrl').value = await scaledImageDataUrl(file);
+    } catch {
+      e.target.value = '';
+      setStorageStatus('This image could not be read. Choose a JPEG, PNG or WebP file.', true);
+    }
   });
   document.getElementById('btnClearModalImage').addEventListener('click', () => {
     document.getElementById('modalImageUrl').value = '';
@@ -932,12 +1098,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (cloud?.locked) return;
     const existingId = document.getElementById('modalCardId').value;
     const catalogCard = currentCatalog().find(c => c.id === existingId);
-    const imageUrl = document.getElementById('modalImageUrl').value.trim() || catalogCard?.imageUrl || '';
+    if (!catalogCard) return;
+    const defaultImage = catalogImage(catalogCard, modalLanguage);
+    const imageUrl = document.getElementById('modalImageUrl').value.trim() || defaultImage || '';
     const normal = Math.max(0, parseInt(document.getElementById('modalNormal').value, 10) || 0);
     const foil = Math.max(0, parseInt(document.getElementById('modalFoil').value, 10) || 0);
 
-    if (!catalogCard) return;
-    const ok = await cloud.change(existingId, { normal, foil, image_override: imageUrl === catalogCard.imageUrl ? null : imageUrl }, modalCloudToken);
+    if (imageUrl.length > MAX_IMAGE_LENGTH) return setStorageStatus('This image is too large. Choose an image file or use a link to the image.', true);
+    const ok = await cloud.change(existingId, modalLanguage, { normal, foil, image_override: imageUrl === defaultImage ? null : imageUrl }, modalCloudToken);
     if (ok) closeModal();
   });
 
@@ -952,20 +1120,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('btnExportCSV').addEventListener('click', () => {
-    const header = ['Nummer', 'Name', 'Set', 'Domain', 'Typ', 'Seltenheit', 'Normal_oder_Sonderfinish_Kopien', 'Foil_Kopien', 'Gesamt', 'Varianten_ID', 'Variante', 'Finishes'];
-    const rows = state.cards.map(c => [
+    const header = ['Nummer', 'Name', 'Set', 'Domain', 'Typ', 'Seltenheit', 'Normal_oder_Sonderfinish_Kopien', 'Foil_Kopien', 'Gesamt', 'Varianten_ID', 'Variante', 'Finishes', 'Sprache'];
+    // One row per language with copies; a variant without copies keeps one row with zero counts.
+    const rows = state.cards.flatMap(c => {
+      const owned = Object.entries(c.copies).filter(([, own]) => own.normal + own.foil > 0);
+      return (owned.length ? owned : [['', { normal: 0, foil: 0 }]]).map(([language, own]) => [c, language, own]);
+    }).map(([c, language, own]) => [
       `"${(c.number || '').replace(/"/g, '""')}"`,
       `"${(c.name || '').replace(/"/g, '""')}"`,
       `"${(c.set || '').replace(/"/g, '""')}"`,
       `"${cardDomains(c).join(' / ').replace(/"/g, '""')}"`,
       `"${(c.type || '').replace(/"/g, '""')}"`,
       `"${(c.rarity || '').replace(/"/g, '""')}"`,
-      c.normal || 0,
-      c.foil || 0,
-      (c.normal || 0) + (c.foil || 0),
+      own.normal,
+      own.foil,
+      own.normal + own.foil,
       c.id,
       `"${(c.variant || '').replace(/"/g, '""')}"`,
-      (c.finishes || []).join(',')
+      (c.finishes || []).join(','),
+      language
     ]);
     const csvContent = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });

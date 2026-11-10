@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { normalizeCatalog } from '../scripts/import-openrift.mjs';
 import { buildCatalogImport, catalogRows, readBundledCatalog } from '../.cache/tools/scripts/export-supabase-catalog.mjs';
@@ -19,7 +19,8 @@ async function database(t) {
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth; create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql as $$select null::uuid$$;`);
-  await db.exec(await readFile(new URL('../supabase/migrations/20261029164445_initial_catalog_and_collection.sql', import.meta.url), 'utf8'));
+  const migrations = new URL('../supabase/migrations/', import.meta.url);
+  for (const file of (await readdir(migrations)).sort()) await db.exec(await readFile(new URL(file, migrations), 'utf8'));
   return db;
 }
 
@@ -90,4 +91,29 @@ test('catalog identity and finish changes conflicting with owned cards fail atom
   await assert.rejects(db.exec(buildCatalogImport(changedIdentity).sql),{code:'23514'});
   assert.equal((await db.query('select name from public.catalog_variants')).rows[0].name,catalog.cards[0].name);
   assert.equal((await db.query('select foil from public.collection_items')).rows[0].foil,3);
+});
+
+test('printings in other languages join their variant; removing an owned language fails atomically', async t => {
+  const db = await database(t);
+  const raw = { sets: [{id:'set',slug:'OGN',name:'Origins'}], cards: {card:{name:'Test card',slug:'test',types:['unit']}}, printings: {} };
+  for (const language of ['EN','FR']) for (const finish of ['normal','foil']) {
+    raw.printings[`${language}-${finish}`] = {cardId:'card',setId:'set',shortCode:'OGN-001',language,finish,rarity:'common',
+      artVariant:'normal',size:'standard',printedName:`Name ${language}`,images:[{imageId:`image-${language}`}]};
+  }
+  const catalog = normalizeCatalog(raw, '2026-10-28T11:08:40.770Z');
+  const [row] = catalogRows(catalog);
+  assert.deepEqual(row.details.languages, ['EN','FR']);
+  assert.deepEqual(row.details.localized, {FR:{name:'Name FR',imageUrl:'https://openrift.app/media/cards/image-FR-400w.webp'}});
+  assert.equal(row.details.sourcePrintingIds.length, 4);
+  await db.exec(buildCatalogImport(catalog).sql);
+  await db.exec("insert into auth.users values ('11111111-1111-4111-8111-111111111111')");
+  await db.query("insert into public.collection_items(user_id,variant_id,language,foil) values ('11111111-1111-4111-8111-111111111111',$1,'FR',2)",[row.id]);
+  delete raw.printings['FR-normal']; delete raw.printings['FR-foil'];
+  const english = normalizeCatalog(raw, '2026-10-28T11:08:40.770Z');
+  assert.equal(english.cards[0].id, row.id);
+  await assert.rejects(db.exec(buildCatalogImport(english).sql),{code:'23514'});
+  assert.deepEqual((await db.query('select details from public.catalog_variants')).rows[0].details.languages, ['EN','FR']);
+  await db.query('update public.collection_items set foil=0');
+  await db.exec(buildCatalogImport(english).sql);
+  assert.deepEqual((await db.query('select details from public.catalog_variants')).rows[0].details.languages, ['EN']);
 });
